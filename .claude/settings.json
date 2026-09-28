@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pytest:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(pip install:*)",
+      "Bash(uvicorn:*)",
+      "Bash(curl:*)",
+      "Bash(docker compose:*)",
+      "Bash(psql:*)",
+      "Bash(ruff:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Bash(git push --force:*)",
+      "Bash(rm -rf:*)",
+      "Edit(crop_rescue/data/crops.json)",
+      "Write(crop_rescue/data/crops.json)"
+    ]
+  }
+}
