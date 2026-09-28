@@ -12,13 +12,15 @@ It is a **prototype for SIH judges**. Keep it simple, readable and explainable. 
 
 ### How it gets used (the only integration mode)
 
-This repo is built and tested on its own. Then the `crop_rescue/` folder is **copied into the existing FarmNex FastAPI backend** and mounted with one line:
+This repo is built and tested on its own. Then the `crop_rescue/` module is **integrated into the existing FarmNex FastAPI backend** (for example at `app/modules/crop_rescue/`) and registered with one line:
 
 ```python
 app.include_router(crop_rescue.router)
 ```
 
-After that, the Crop Rescue endpoints run **inside the main backend**: the same server, the same URL, the same deployment and the same Supabase PostgreSQL database. There is no separate service and no API keys.
+After that, it runs **in the same backend process** and uses the existing Supabase PostgreSQL database, while keeping its own `cr_` tables. **No separate service or separate deployment is needed, and no API keys are needed for this internal integration.** The existing FarmNex login (authentication) and infrastructure are reused. The endpoints are still protected: every request must come from a logged-in user, and a farmer can only see and change **their own** lots and alerts.
+
+This is a **modular monolith**: one backend, cleanly separated modules. That's the right fit for an SIH prototype. The module is written so it could be split into its own service later without rewriting the logic.
 
 The existing app it plugs into:
 - **Backend:** FastAPI (already built, the host)
@@ -40,13 +42,32 @@ The existing app it plugs into:
 
 ---
 
+## ⚠️ Database safety rules (non-negotiable, read first)
+
+Crop Rescue will live in the **team's main Supabase PostgreSQL database**, the one the FarmNex app already runs on. That database must never be harmed.
+
+1. **Add only. Never touch anything that already exists.** The only objects this repo may create are new tables, indexes and views whose names start with `cr_`.
+2. **Forbidden, always:** `DROP` (of anything, `cr_` included), `TRUNCATE`, `ALTER` on any non-`cr_` object, `DELETE`/`UPDATE`/`INSERT` on any non-`cr_` table, `GRANT`/`REVOKE`, `CREATE EXTENSION`, changing roles, policies, schemas or auth settings, and resetting or restoring the database. If a `cr_` table needs a new column, use only `ALTER TABLE cr_... ADD COLUMN IF NOT EXISTS`.
+3. **Never read, query or join an existing (non-`cr_`) table** from code or tests. Buyers come only through the `cr_buyer_pool` view, which the team redefines themselves later.
+4. **Never run SQL against the main Supabase database yourself.** The user runs the two migration files in the Supabase SQL editor.
+5. **Tests never touch the main database.** They run only against the separate **test database** (`CR_TEST_DATABASE_URL`, e.g. the local docker `db` service). If that variable is missing, DB tests are skipped, and they must never fall back to `CR_DATABASE_URL` or `DATABASE_URL`.
+6. **Connection strings are secrets.** They live only in `.env` (git-ignored) or the host backend's env vars. Never print, log or commit them.
+7. `tests/test_migrations_safe.py` scans every `.sql` file and fails on any forbidden statement or any non-`cr_` object. It needs no database, must always pass, and must never be weakened.
+
+If a task seems to need breaking one of these rules, **stop and ask the user**.
+
+---
+
 ## Hard rules
 
 - **Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2.0 Core (not ORM), psycopg 3.** Use Core so there is no `DeclarativeBase` clash with the host app's models.
-- **`crop_rescue/` imports nothing outside itself.** It must work after being copied into any FastAPI project.
+- **`crop_rescue/` imports nothing outside itself, and imports itself only with relative imports** (`from .core import shelf_life`, never `from crop_rescue.core import ...`). This way it works whether it sits at the backend root or at `app/modules/crop_rescue/`.
 - **Every table is prefixed `cr_`.** Never touch or reference host tables directly. `farmer_id` and `buyer_id` are plain `TEXT` with no foreign keys.
 - **Use plain `.sql` migrations, not Alembic,** so they can be pasted into the Supabase SQL editor and won't collide with any Alembic history in the host.
-- **No auth inside the router.** The host backend protects it with its existing login check: `include_router(router, dependencies=[Depends(get_current_user)])`. No API keys anywhere in this repo.
+- **No login code inside the router, and no API keys.** The host protects it with its existing login check: `include_router(router, dependencies=[Depends(get_current_user)])`. It also tells the module who the farmer is by overriding one dependency (see "Who is the farmer" below).
+- **Thin router, layered code:** `api.py` (HTTP only) → `service.py` (business logic) → `repository.py` (SQL) → PostgreSQL. No business logic and no SQL in `api.py`.
+- **The module must never crash the host backend.** Every scheduler run is wrapped in `try/except`: errors are logged and the next run carries on. No endless loops, no blocking waits longer than the 3-second Open-Meteo timeout, no heavy work inside a request.
+- **Light dependencies only** (see `requirements.txt`): no numpy, pandas, scikit-learn or ML packages. Use version ranges, not exact pins, so they fit the host's environment.
 - **All logic in `core/` must be pure functions** with no DB, no FastAPI and no clock access (pass `now` in). This is what the tests and the judges' explanation rely on.
 - **Exactly 8 crops.** Do not add more.
 - **No ML model here.** This is a rule-based engine by design. Demand forecasting lives in the separate `farmnex_ai_forecaster` repo. Do not import from it.
@@ -63,7 +84,7 @@ farmnex-crop-rescue/
 ├── INTEGRATION.md            # the 5-step guide for mounting it in the main backend
 ├── requirements.txt          # runtime lines the host must add + dev/test lines
 ├── crop_rescue/              # ← THIS FOLDER is what gets copied into the main backend
-│   ├── __init__.py           # exports: router, start_scheduler, stop_scheduler, settings, configure
+│   ├── __init__.py           # exports: router, start_scheduler, stop_scheduler, settings, configure, current_farmer_id
 │   ├── config.py             # pydantic-settings, all env vars prefixed CR_
 │   ├── data/crops.json       # the 8 crops (already filled in, sourced)
 │   ├── core/
@@ -75,7 +96,8 @@ farmnex-crop-rescue/
 │   ├── service.py            # glue: repository + core
 │   ├── scheduler.py          # APScheduler job every CR_CHECK_INTERVAL_HOURS
 │   ├── schemas.py            # Pydantic request/response models (with examples)
-│   └── api.py                # APIRouter(prefix="/rescue", tags=["crop-rescue"])
+│   ├── deps.py               # current_farmer_id dependency (the host overrides it)
+│   └── api.py                # APIRouter(prefix="/rescue", tags=["crop-rescue"]) — thin, HTTP only
 ├── migrations/
 │   ├── 001_crop_rescue.sql   # cr_ tables + cr_buyer_pool view
 │   └── 002_demo_seed.sql     # ~10 demo buyers around Pune (clearly marked DEMO)
@@ -210,7 +232,9 @@ CREATE VIEW cr_buyer_pool AS SELECT buyer_id, buyer_name, crop_code, price_per_k
        max_qty_kg, lat, lng, reliability FROM cr_demo_buyers;
 ```
 
-All statements are idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE VIEW`), so running the file twice is safe.
+All statements are idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `CREATE OR REPLACE VIEW` on `cr_` views only), so running the file twice is safe. Wrap the file in `BEGIN; ... COMMIT;` so it either fully applies or changes nothing. The only other statement allowed is `ALTER TABLE cr_<name> ENABLE ROW LEVEL SECURITY;` on the new `cr_` tables. This stops the public Supabase anon key from reading them through Supabase's auto-generated API. The backend connects directly as the database owner, so it is unaffected, and no policies are needed.
+
+`002_demo_seed.sql` inserts **only** into `cr_demo_buyers`, with `ON CONFLICT DO NOTHING`.
 
 **`cr_buyer_pool` is the single integration seam for buyers.** In the real app the team replaces this view with a `SELECT` over the main app's buyer tables. The Python code only ever reads the view.
 
@@ -224,7 +248,33 @@ Demo buyers: about 10 rows around Pune, Nashik and Chakan with coordinates, spre
 
 - `configure(engine=...)` lets the host pass in **its own SQLAlchemy engine**, so Crop Rescue shares the main backend's connection pool. This is the preferred setup.
 - If no engine is passed, create one lazily (on first use, never at import) from `CR_DATABASE_URL`, falling back to `DATABASE_URL`.
-- The Supabase URL needs the `postgresql+psycopg://` driver prefix and `?sslmode=require`.
+- The Supabase URL needs the `postgresql+psycopg://` driver prefix and `?sslmode=require`. Where to find it: Supabase dashboard → **Connect** → **Session pooler** string, then change `postgresql://` to `postgresql+psycopg://`. This is the database connection string. The Supabase anon and service API keys are not needed.
+- Tests use `CR_TEST_DATABASE_URL` only (see the Database safety rules).
+
+---
+
+## Who is the farmer (ownership)
+
+`crop_rescue/deps.py` defines one FastAPI dependency:
+
+```python
+def current_farmer_id(farmer_id: str | None = Query(None, description="Dev/demo only")) -> str:
+    """Default: reads ?farmer_id= (for local testing and the demo).
+    In the main backend this is overridden to return the logged-in user's id."""
+    if not farmer_id:
+        raise HTTPException(401, "Farmer not identified")
+    return farmer_id
+```
+
+Every farmer-facing endpoint gets the farmer from `Depends(current_farmer_id)`, **never from the request body**. In the main backend, one line replaces it with the real login:
+
+```python
+app.dependency_overrides[crop_rescue.current_farmer_id] = lambda user=Depends(get_current_user): str(user.id)
+```
+
+After that the `?farmer_id=` query parameter is ignored, and the farmer is always the logged-in user.
+
+**Ownership rule:** `/rescue/lots/{id}`, `/matches`, `/sold` and `/alerts/{id}/read` return **404** if the lot or alert belongs to another farmer. Use 404 rather than 403 so other farmers' lot ids aren't revealed. This check lives in `service.py`.
 
 ---
 
@@ -236,15 +286,15 @@ Once mounted, these live at `https://<main-backend-url>/rescue/...` and show up 
 |---|---|---|
 | GET | `/rescue/health` | `{ok, crops: 8, db: true}` |
 | GET | `/rescue/crops` | the 8 crops plus life at 25/30/35 °C, with the source and the Q10 assumption |
-| POST | `/rescue/lots` | register a lot. Body: `farmer_id, crop_code, quantity_kg, harvested_at, lat, lng, storage_mode?, floor_price_per_kg?, temperature_c?`. Runs the first check immediately and returns the lot. |
-| GET | `/rescue/lots?farmer_id=` | farmer's lots with status, remaining_hours and spoil_eta |
-| GET | `/rescue/lots/{id}` | one lot plus its `checks` history |
-| GET | `/rescue/lots/{id}/matches` | top 3 buyers (409 if the lot is not AT_RISK) |
-| POST | `/rescue/lots/{id}/sold` | mark SOLD so it stops alerting |
-| POST | `/rescue/check` | run the engine over all open lots now (the same job the scheduler runs) |
-| POST | `/rescue/simulate` | **demo button.** Body: `hours` (e.g. 24), `temperature_c?`, `lot_id?`. Advances each lot's clock by `hours` without waiting, then runs the status rules and alerts. |
-| GET | `/rescue/alerts?farmer_id=&unread_only=true` | Flutter polls this (every 30 s on the farmer home screen) |
-| POST | `/rescue/alerts/{id}/read` | mark read |
+| POST | `/rescue/lots` | register a lot for the **current farmer**. Body: `crop_code, quantity_kg, harvested_at, lat, lng, storage_mode?, floor_price_per_kg?, temperature_c?` (no `farmer_id` in the body). Runs the first check immediately and returns the lot. |
+| GET | `/rescue/lots` | the current farmer's lots with status, remaining_hours and spoil_eta |
+| GET | `/rescue/lots/{id}` | one of the current farmer's lots plus its `checks` history (404 if not theirs) |
+| GET | `/rescue/lots/{id}/matches` | top 3 buyers (404 if not theirs, 409 if the lot is not AT_RISK) |
+| POST | `/rescue/lots/{id}/sold` | mark SOLD so it stops alerting (404 if not theirs) |
+| POST | `/rescue/check` | run the engine over all open lots now (the same job the scheduler runs). Needs no farmer. |
+| POST | `/rescue/simulate` | **demo button.** Body: `hours` (e.g. 24), `temperature_c?`, `lot_id?`. Advances the **current farmer's** lots (or that one lot) by `hours` without waiting, then runs the status rules and alerts. Returns **404 when `CR_ENABLE_SIMULATE=false`**, so it can be switched off after the demo. |
+| GET | `/rescue/alerts?unread_only=true` | the current farmer's alerts. Flutter polls this every 30 s on the farmer home screen. |
+| POST | `/rescue/alerts/{id}/read` | mark read (404 if not theirs) |
 
 - Endpoints are plain sync `def` (FastAPI runs them in a threadpool), so they work whether the host is sync or async.
 - Every endpoint has a `summary` and `description`, and every request model has `json_schema_extra` examples, so "Try it out" in `/docs` works in one click for judges.
@@ -258,7 +308,7 @@ Once mounted, these live at `https://<main-backend-url>/rescue/...` and show up 
 
 ## Config (`CR_` env vars, all with defaults)
 
-`CR_DATABASE_URL` (falls back to `DATABASE_URL`), `CR_CHECK_INTERVAL_HOURS=12`, `CR_ALERT_HOURS=48`, `CR_Q10=2.0`, `CR_DEFAULT_TEMP_C=30`, `CR_USE_OPEN_METEO=false`, `CR_RADIUS_KM=50`, `CR_ROAD_FACTOR=1.3`, `CR_AVG_SPEED_KMPH=35`, `CR_LOADING_HOURS=2`, `CR_TRANSPORT_RS_PER_KM=25`, `CR_TOP_N=3`, `CR_ENABLE_SCHEDULER=true`.
+`CR_DATABASE_URL` (falls back to `DATABASE_URL`), `CR_CHECK_INTERVAL_HOURS=12`, `CR_ALERT_HOURS=48`, `CR_Q10=2.0`, `CR_DEFAULT_TEMP_C=30`, `CR_USE_OPEN_METEO=false`, `CR_RADIUS_KM=50`, `CR_ROAD_FACTOR=1.3`, `CR_AVG_SPEED_KMPH=35`, `CR_LOADING_HOURS=2`, `CR_TRANSPORT_RS_PER_KM=25`, `CR_TOP_N=3`, `CR_ENABLE_SCHEDULER=true`, `CR_ENABLE_SIMULATE=true` (set it to `false` after the demo). For tests only: `CR_TEST_DATABASE_URL`.
 
 The host only needs to set these if it wants to change a default.
 
@@ -266,7 +316,9 @@ The host only needs to set these if it wants to change a default.
 
 ## Scheduler
 
-`start_scheduler()` and `stop_scheduler()` use APScheduler's `BackgroundScheduler` with one interval job that calls the same function as `POST /rescue/check`. The host calls them from its existing `lifespan`. Make the job idempotent (dedup keys). Log one line per run: `checked=N at_risk=M spoiled=K`.
+`start_scheduler()` and `stop_scheduler()` use APScheduler's `BackgroundScheduler` with one interval job that calls the same function as `POST /rescue/check`. The job runs in a background thread, so it never blocks API requests. The host calls these two functions from its existing `lifespan`. Make the job idempotent (dedup keys). Log one line per run: `checked=N at_risk=M spoiled=K`.
+
+**Crash-proof:** wrap the whole job body in `try/except Exception`, log the error with `logger.exception`, and return. A failed run must never stop the scheduler or the host backend. Also set `max_instances=1` and `coalesce=True` so runs never pile up.
 
 If the host runs multiple workers, set `CR_ENABLE_SCHEDULER=false` on all but one, or trigger `/rescue/check` from an external cron.
 
@@ -276,7 +328,7 @@ If the host runs multiple workers, set `CR_ENABLE_SCHEDULER=false` on all but on
 
 ## Local development (`dev_app.py`)
 
-A 15-line FastAPI app that does `include_router(router)` plus the scheduler lifespan. It exists **only** so this repo can be run and tested on its own with `uvicorn dev_app:app --reload`. It is never copied into the main backend and never deployed.
+A 15-line FastAPI app that does `include_router(router)` plus the scheduler lifespan. It exists **only** so this repo can be run and tested on its own with `CR_DATABASE_URL=$CR_TEST_DATABASE_URL uvicorn dev_app:app --reload`. **Always point it at the test database, never the main Supabase one.** It is never copied into the main backend and never deployed.
 
 ---
 
@@ -289,7 +341,12 @@ A 15-line FastAPI app that does `include_router(router)` plus the scheduler life
 - Matching: buyers beyond the radius, buyers that are too slow, and buyers below the floor are all excluded. The ordering follows the score. Returns at most 3.
 - API: create lot → simulate 36 h → alert appears → matches return 3 → sold → no more alerts.
 - Mounting: a fresh FastAPI app with `include_router(router, dependencies=[Depends(fake_auth)])` rejects requests when `fake_auth` raises 401. This proves the host's auth wraps it correctly.
-- For DB tests, use a real Postgres (a docker `postgres:16` or a `CR_TEST_DATABASE_URL`). **No SQLite.**
+- Ownership: with `current_farmer_id` overridden to farmer A, farmer B's lot returns 404 on get, matches, sold and alert read. Listing shows only A's lots. `farmer_id` in a POST body is ignored or rejected.
+- Nested placement: copy `crop_rescue/` to `tmp/app/modules/crop_rescue/`, then `from app.modules.crop_rescue import router` and mount it. It must work, which proves imports are relative.
+- Scheduler safety: make the repository raise inside the job and assert the job logs and returns without raising.
+- Simulate switch: with `CR_ENABLE_SIMULATE=false`, `/rescue/simulate` → 404.
+- Migration safety (`tests/test_migrations_safe.py`): no forbidden statement and no object without the `cr_` prefix in any `.sql` file. Needs no database.
+- **DB tests use only `CR_TEST_DATABASE_URL`** (a real Postgres, e.g. the docker `db` service; **no SQLite**). If it isn't set, skip them with a clear message. Never fall back to the main Supabase URL.
 
 ---
 
@@ -306,12 +363,12 @@ A 15-line FastAPI app that does `include_router(router)` plus the scheduler life
 
 ## INTEGRATION.md must contain exactly these 5 steps
 
-1. **Copy** the `crop_rescue/` folder into the main backend (next to its `main.py` or inside its app package). Add the runtime lines from `requirements.txt` to the backend's requirements.
-2. **Create the tables:** open the main app's Supabase project → SQL Editor → run `migrations/001_crop_rescue.sql`, then `002_demo_seed.sql` for the demo buyers.
-3. **Mount the router** in the backend's `main.py`:
+1. **Add the module** to the main backend, for example at `app/modules/crop_rescue/` (any location works because imports are relative). Add the runtime lines from `requirements.txt` to the backend's requirements.
+2. **Create the tables:** open the main app's Supabase project → SQL Editor → run `migrations/001_crop_rescue.sql`, then `002_demo_seed.sql` for the demo buyers. These only **add** new `cr_` tables. Nothing existing is changed.
+3. **Register the router** in the backend's `main.py`:
    ```python
-   import crop_rescue
-   from crop_rescue import router as rescue_router, start_scheduler, stop_scheduler
+   from app.modules import crop_rescue   # adjust to where you placed it
+   from app.modules.crop_rescue import router as rescue_router, start_scheduler, stop_scheduler
 
    crop_rescue.configure(engine=engine)   # reuse the backend's existing SQLAlchemy engine (optional)
 
@@ -323,18 +380,20 @@ A 15-line FastAPI app that does `include_router(router)` plus the scheduler life
 
    app = FastAPI(lifespan=lifespan)       # or add these two calls to the existing lifespan
    app.include_router(rescue_router, dependencies=[Depends(get_current_user)])  # existing login check
+   # the farmer is always the logged-in user:
+   app.dependency_overrides[crop_rescue.current_farmer_id] = lambda user=Depends(get_current_user): str(user.id)
    ```
 4. **Flutter:** copy `integration/flutter/crop_rescue_api.dart` into the app. Create it with the app's existing Dio, `CropRescueApi(dio)`, so the base URL and login token carry over. Call `fetchAlerts(farmerId)` on the farmer home screen every 30 s.
 5. **Real buyers (later):** redefine the `cr_buyer_pool` view as a `SELECT` over the main app's real buyer tables. No Python changes are needed.
 
-Also include a `curl` smoke test for each endpoint against the main backend URL, using whatever auth header the backend already uses.
+Also include a `curl` smoke test for each endpoint against the main backend URL, using whatever auth header the backend already uses. Add a note: set `CR_ENABLE_SIMULATE=false` once the demo is over.
 
 ---
 
 ## Out of scope — do not build
 
-API keys, a separate deployable service, Dockerfile, ML models, price prediction, weather forecasting beyond the current temperature, photo-based spoilage detection, partial multi-buyer allocation, payments, logistics booking, FCM integration code, admin UI, more than 8 crops, Alembic.
+Any change to existing Supabase tables, running tests against the main database, API keys, a separate deployable service, Dockerfile, Celery or job queues, ML models, price prediction, weather forecasting beyond the current temperature, photo-based spoilage detection, partial multi-buyer allocation, payments, logistics booking, FCM integration code, admin UI, more than 8 crops, Alembic.
 
 ## Definition of done
 
-`pytest` is green. `uvicorn dev_app:app` serves `/docs` with the crop-rescue section and working examples. The demo script works end to end with curl. README explains the algorithm in under a page, cites the source and flags the assumptions (Q10, default temperature, demo buyers). INTEGRATION.md has the 5 steps. The `crop_rescue/` folder imports nothing outside itself, and mounting it in a fresh FastAPI app works.
+`pytest` is green (including the migration-safety, ownership, nested-placement and scheduler-safety tests), and the main Supabase database was never touched by tests. `uvicorn dev_app:app` serves `/docs` with the crop-rescue section and working examples. The demo script works end to end with curl. README explains the algorithm in under a page, cites the source and flags the assumptions (Q10, default temperature, demo buyers). INTEGRATION.md has the 5 steps. The `crop_rescue/` folder imports nothing outside itself, and mounting it in a fresh FastAPI app works.

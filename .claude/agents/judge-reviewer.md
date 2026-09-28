@@ -16,10 +16,17 @@ Check from three angles:
 
 **2. Teammate integrating it**
 - Could they integrate using only INTEGRATION.md in under 30 minutes?
-- Does `crop_rescue/` import anything outside itself? Is there any non-`cr_` table? Any FK to a host table?
+- Does `crop_rescue/` import anything outside itself? Are internal imports relative? Is there any non-`cr_` table? Any FK to a host table?
 - Do the Dart models match the JSON?
 
-**3. Code quality**
+**3. Safety of the main database and the host backend**
+- Could any migration, code path or test change, drop or read an existing (non-`cr_`) Supabase object? Any hit is MUST-FIX.
+- Do tests use only `CR_TEST_DATABASE_URL`?
+- Can a farmer see or change another farmer's lot or alert?
+- Can a scheduler error or a slow external call crash or block the host backend?
+
+**4. Code quality**
+- Is `api.py` thin (no SQL, no logic)?
 - Is `core/` pure, with no DB, clock or env reads?
 - Are there error paths for an unknown crop, a missing lot, matches on a FRESH lot, and simulate with no lots?
 - Can alerts ever duplicate?

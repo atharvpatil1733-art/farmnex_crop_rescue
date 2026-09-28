@@ -13,20 +13,22 @@ Build one phase per `/build-phase <n>` and stop after each one. Rough times assu
 - [ ] tests: radius, too-slow, below-floor, ordering, top-N, empty candidates
 
 ## Phase 3: Database (≈1 h) · skills: drop-in-contract
-- [ ] `migrations/001_crop_rescue.sql` (idempotent) and `migrations/002_demo_seed.sql` (10 DEMO buyers around Pune, Chakan and Nashik)
+- [ ] `migrations/001_crop_rescue.sql` (idempotent, `BEGIN/COMMIT`, only `cr_` objects, RLS enabled on `cr_` tables) and `migrations/002_demo_seed.sql` (10 DEMO buyers around Pune, Chakan and Nashik)
+- [ ] `tests/test_migrations_safe.py` (no DB needed): fails on DROP/TRUNCATE/GRANT/REVOKE/CREATE EXTENSION or any non-`cr_` object
 - [ ] `crop_rescue/db.py` (lazy engine, `configure()`), `crop_rescue/repository.py`
-- [ ] tests against real Postgres (docker compose `db` service)
+- [ ] tests against the **test** Postgres only (`CR_TEST_DATABASE_URL`, docker compose `db` service); skipped if not set
 
 ## Phase 4: Router, service and scheduler (≈2 h) · skills: drop-in-contract, shelf-life-engine
-- [ ] `schemas.py` (with examples), `service.py` (with the `on_alert` hook and check-on-read), `api.py` (all endpoints, with summaries), `scheduler.py`
+- [ ] `deps.py` (`current_farmer_id`), `schemas.py` (with examples), `service.py` (with ownership checks, the `on_alert` hook and check-on-read), thin `api.py` (all endpoints, with summaries), crash-proof `scheduler.py`
 - [ ] `crop_rescue/__init__.py` public surface
 - [ ] `dev_app.py` (local testing only)
 - [ ] API test: create → simulate → alert → matches → sold → no more alerts
 - [ ] mounting test: host auth dependency wraps the router (401 when it fails)
+- [ ] ownership test (other farmer → 404), nested-placement test (`app/modules/crop_rescue`), scheduler-safety test, simulate-switch test
 
 ## Phase 5: Flutter client and integration docs (≈1 h) · skills: drop-in-contract
-- [ ] `integration/flutter/crop_rescue_api.dart` (takes the app's existing Dio)
-- [ ] `INTEGRATION.md` (5 steps plus curl smoke tests)
+- [ ] `integration/flutter/crop_rescue_api.dart` (takes the app's existing Dio, no `farmerId` params)
+- [ ] `INTEGRATION.md` (5 steps including the `dependency_overrides` line, plus curl smoke tests)
 - [ ] `/integration-check` all ✅
 
 ## Phase 6: Judge polish (≈1 h)
