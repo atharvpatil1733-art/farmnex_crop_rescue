@@ -3,10 +3,10 @@
 Build one phase per `/build-phase <n>` and stop after each one. Rough times assume Claude Code is doing the typing.
 
 ## Phase 1: Core engine (≈1.5 h) · skills: shelf-life-engine · SPEC: Crop data, Algorithm §1–4, Config, Tests
-- [ ] `crop_rescue/core/shelf_life.py`: load crops.json, `life_hours`, `advance_freshness`, `remaining_hours`
-- [ ] `crop_rescue/core/status.py`: status rules plus `should_alert(prev_status, new_status)`
-- [ ] `crop_rescue/config.py`: pydantic-settings with every `CR_` var and its default
-- [ ] tests: sanity-number table, cold cap, accumulation, status thresholds, the ≥48 h notice property
+- [x] `crop_rescue/core/shelf_life.py`: load crops.json, `life_hours`, `advance_freshness`, `remaining_hours`
+- [x] `crop_rescue/core/status.py`: status rules plus `should_alert(prev_status, new_status)`
+- [x] `crop_rescue/config.py`: pydantic-settings with every `CR_` var and its default
+- [x] tests: sanity-number table, cold cap, accumulation, status thresholds, the ≥48 h notice property
 
 ## Phase 2: Matching (≈1 h) · skills: shelf-life-engine · SPEC: Algorithm §5, Tests
 - [ ] `crop_rescue/core/matching.py`: haversine, feasibility, net price, floor, scoring, reasons
