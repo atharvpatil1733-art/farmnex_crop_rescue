@@ -12,14 +12,32 @@ through the `cr_buyer_pool` view.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 
 import sqlalchemy as sa
-from sqlalchemy import Engine
+from sqlalchemy import Connection, Engine
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 metadata = sa.MetaData()
+
+# Every function takes either an Engine (runs in its own transaction) or a
+# Connection (runs inside the caller's transaction, so service.py can make
+# several writes commit or roll back together).
+Bind = Engine | Connection
+
+
+@contextmanager
+def _use(bind: Bind) -> Iterator[Connection]:
+    """The caller's connection as-is, or a new committed transaction for an Engine."""
+    if isinstance(bind, Connection):
+        yield bind
+    else:
+        with bind.begin() as conn:
+            yield conn
+
 
 cr_lots = sa.Table(
     "cr_lots",
@@ -210,7 +228,7 @@ def _buyer_from_row(row: sa.Row) -> BuyerRecord:
 
 
 def insert_lot(
-    engine: Engine,
+    bind: Bind,
     *,
     farmer_id: str,
     crop_code: str,
@@ -246,40 +264,40 @@ def insert_lot(
         )
         .returning(cr_lots)
     )
-    with engine.begin() as conn:
+    with _use(bind) as conn:
         row = conn.execute(stmt).one()
     return _lot_from_row(row)
 
 
-def get_lot(engine: Engine, lot_id: str, farmer_id: str) -> LotRecord | None:
+def get_lot(bind: Bind, lot_id: str, farmer_id: str) -> LotRecord | None:
     """A lot by id, scoped to `farmer_id`. None if missing or owned by someone else."""
     stmt = sa.select(cr_lots).where(cr_lots.c.id == lot_id, cr_lots.c.farmer_id == farmer_id)
-    with engine.connect() as conn:
+    with _use(bind) as conn:
         row = conn.execute(stmt).one_or_none()
     return _lot_from_row(row) if row is not None else None
 
 
-def list_lots(engine: Engine, farmer_id: str, status: str | None = None) -> list[LotRecord]:
+def list_lots(bind: Bind, farmer_id: str, status: str | None = None) -> list[LotRecord]:
     """All of a farmer's lots, newest first, optionally filtered by status."""
     stmt = sa.select(cr_lots).where(cr_lots.c.farmer_id == farmer_id)
     if status is not None:
         stmt = stmt.where(cr_lots.c.status == status)
     stmt = stmt.order_by(cr_lots.c.created_at.desc())
-    with engine.connect() as conn:
+    with _use(bind) as conn:
         rows = conn.execute(stmt).all()
     return [_lot_from_row(row) for row in rows]
 
 
-def list_active_lots(engine: Engine) -> list[LotRecord]:
+def list_active_lots(bind: Bind) -> list[LotRecord]:
     """Every lot the scheduler still needs to check (not SOLD or SPOILED)."""
     stmt = sa.select(cr_lots).where(cr_lots.c.status.notin_(["SOLD", "SPOILED"]))
-    with engine.connect() as conn:
+    with _use(bind) as conn:
         rows = conn.execute(stmt).all()
     return [_lot_from_row(row) for row in rows]
 
 
 def update_lot_after_check(
-    engine: Engine,
+    bind: Bind,
     lot_id: str,
     farmer_id: str,
     *,
@@ -302,12 +320,12 @@ def update_lot_after_check(
         )
         .returning(cr_lots)
     )
-    with engine.begin() as conn:
+    with _use(bind) as conn:
         row = conn.execute(stmt).one_or_none()
     return _lot_from_row(row) if row is not None else None
 
 
-def mark_lot_sold(engine: Engine, lot_id: str, farmer_id: str) -> LotRecord | None:
+def mark_lot_sold(bind: Bind, lot_id: str, farmer_id: str) -> LotRecord | None:
     """Mark a lot SOLD. None if it isn't found (or belongs to someone else)."""
     stmt = (
         sa.update(cr_lots)
@@ -315,13 +333,13 @@ def mark_lot_sold(engine: Engine, lot_id: str, farmer_id: str) -> LotRecord | No
         .values(status="SOLD")
         .returning(cr_lots)
     )
-    with engine.begin() as conn:
+    with _use(bind) as conn:
         row = conn.execute(stmt).one_or_none()
     return _lot_from_row(row) if row is not None else None
 
 
 def insert_check(
-    engine: Engine,
+    bind: Bind,
     *,
     lot_id: str,
     temperature_c: float,
@@ -345,13 +363,13 @@ def insert_check(
         )
         .returning(cr_checks)
     )
-    with engine.begin() as conn:
+    with _use(bind) as conn:
         row = conn.execute(stmt).one()
     return _check_from_row(row)
 
 
 def insert_alert(
-    engine: Engine,
+    bind: Bind,
     *,
     lot_id: str,
     farmer_id: str,
@@ -379,23 +397,23 @@ def insert_alert(
         .on_conflict_do_nothing(index_elements=[cr_alerts.c.dedup_key])
         .returning(cr_alerts)
     )
-    with engine.begin() as conn:
+    with _use(bind) as conn:
         row = conn.execute(stmt).one_or_none()
     return _alert_from_row(row) if row is not None else None
 
 
-def list_alerts(engine: Engine, farmer_id: str, unread_only: bool = False) -> list[AlertRecord]:
+def list_alerts(bind: Bind, farmer_id: str, unread_only: bool = False) -> list[AlertRecord]:
     """A farmer's alerts, newest first."""
     stmt = sa.select(cr_alerts).where(cr_alerts.c.farmer_id == farmer_id)
     if unread_only:
         stmt = stmt.where(cr_alerts.c.read_at.is_(None))
     stmt = stmt.order_by(cr_alerts.c.created_at.desc())
-    with engine.connect() as conn:
+    with _use(bind) as conn:
         rows = conn.execute(stmt).all()
     return [_alert_from_row(row) for row in rows]
 
 
-def mark_alert_read(engine: Engine, alert_id: str, farmer_id: str, read_at: datetime) -> AlertRecord | None:
+def mark_alert_read(bind: Bind, alert_id: str, farmer_id: str, read_at: datetime) -> AlertRecord | None:
     """Mark one of a farmer's alerts read. None if it isn't found."""
     stmt = (
         sa.update(cr_alerts)
@@ -403,22 +421,22 @@ def mark_alert_read(engine: Engine, alert_id: str, farmer_id: str, read_at: date
         .values(read_at=read_at)
         .returning(cr_alerts)
     )
-    with engine.begin() as conn:
+    with _use(bind) as conn:
         row = conn.execute(stmt).one_or_none()
     return _alert_from_row(row) if row is not None else None
 
 
-def list_checks_for_lot(engine: Engine, lot_id: str) -> list[CheckRecord]:
+def list_checks_for_lot(bind: Bind, lot_id: str) -> list[CheckRecord]:
     """A lot's full audit trail, newest first."""
     stmt = sa.select(cr_checks).where(cr_checks.c.lot_id == lot_id).order_by(cr_checks.c.checked_at.desc())
-    with engine.connect() as conn:
+    with _use(bind) as conn:
         rows = conn.execute(stmt).all()
     return [_check_from_row(row) for row in rows]
 
 
-def list_buyers_for_crop(engine: Engine, crop_code: str) -> list[BuyerRecord]:
+def list_buyers_for_crop(bind: Bind, crop_code: str) -> list[BuyerRecord]:
     """Candidate buyers for a crop, read only from `cr_buyer_pool`."""
     stmt = sa.select(cr_buyer_pool).where(cr_buyer_pool.c.crop_code == crop_code)
-    with engine.connect() as conn:
+    with _use(bind) as conn:
         rows = conn.execute(stmt).all()
     return [_buyer_from_row(row) for row in rows]

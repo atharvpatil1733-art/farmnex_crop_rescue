@@ -199,3 +199,44 @@ def test_simulate_never_touches_a_sold_lot(client):
     assert response.status_code == 200
     assert response.json()["lots"][0]["status"] == "SOLD"
     assert client.get(f"/rescue/lots/{lot['id']}").json()["status"] == "SOLD"
+
+
+def test_failed_check_rolls_back_the_lot_update_and_alert(client, monkeypatch):
+    """The lot update, check row and alert commit together: if writing the
+    check row fails, the lot keeps its old status and no alert exists."""
+    _as_farmer(client, f"farmer-{uuid.uuid4()}")
+    lot = _create_tomato_lot(client)
+    assert lot["status"] == "FRESH"
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("insert_check failed")
+
+    monkeypatch.setattr("crop_rescue.repository.insert_check", fail)
+    with pytest.raises(RuntimeError):
+        client.post("/rescue/simulate", json={"hours": 36, "lot_id": lot["id"]})
+    monkeypatch.undo()
+
+    detail = client.get(f"/rescue/lots/{lot['id']}").json()
+    assert detail["status"] == "FRESH"
+    assert detail["remaining_hours"] == lot["remaining_hours"]
+    assert len(detail["checks"]) == 1
+    assert client.get("/rescue/alerts").json() == []
+
+
+def test_check_on_read_runs_when_any_lot_is_overdue(db, client):
+    """Staleness follows the OLDEST open lot: a freshly registered lot must
+    not hide another lot whose last check is overdue."""
+    _as_farmer(client, f"farmer-{uuid.uuid4()}")
+    overdue = _create_tomato_lot(client, temperature_c=20)
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "UPDATE cr_lots SET last_checked_at = now() - interval '13 hours' WHERE id = %s",
+            (overdue["id"],),
+        )
+    _create_tomato_lot(client, temperature_c=20)  # the newest check is now "just now"
+
+    client.get("/rescue/lots")  # check-on-read
+
+    checks = client.get(f"/rescue/lots/{overdue['id']}").json()["checks"]
+    assert len(checks) == 2
+    assert checks[0]["elapsed_hours"] == pytest.approx(13, abs=0.1)

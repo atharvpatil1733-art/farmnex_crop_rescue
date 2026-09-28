@@ -127,8 +127,8 @@ def _compute_check(
     return temp_c, temp_source, freshness_used, remaining, new_status
 
 
-def _create_at_risk_alert(engine: Engine, lot: repo.LotRecord) -> repo.AlertRecord | None:
-    buyers = repo.list_buyers_for_crop(engine, lot.crop_code)
+def _create_at_risk_alert(conn: repo.Bind, lot: repo.LotRecord) -> repo.AlertRecord | None:
+    buyers = repo.list_buyers_for_crop(conn, lot.crop_code)
     lot_for_matching = matching.LotForMatching(
         crop_code=lot.crop_code,
         quantity_kg=lot.quantity_kg,
@@ -159,8 +159,8 @@ def _create_at_risk_alert(engine: Engine, lot: repo.LotRecord) -> repo.AlertReco
         "remaining_hours": round(lot.remaining_hours or 0.0, 1),
         "matches": [dataclasses.asdict(m) for m in matches],
     }
-    alert = repo.insert_alert(
-        engine,
+    return repo.insert_alert(
+        conn,
         lot_id=lot.id,
         farmer_id=lot.farmer_id,
         kind="AT_RISK",
@@ -169,16 +169,14 @@ def _create_at_risk_alert(engine: Engine, lot: repo.LotRecord) -> repo.AlertReco
         payload=payload,
         dedup_key=f"{lot.farmer_id}:{lot.id}:AT_RISK",
     )
-    _notify(alert)
-    return alert
 
 
-def _create_spoiled_alert(engine: Engine, lot: repo.LotRecord) -> repo.AlertRecord | None:
+def _create_spoiled_alert(conn: repo.Bind, lot: repo.LotRecord) -> repo.AlertRecord | None:
     title = f"Your {lot.quantity_kg:.0f} kg {lot.crop_code} lot has spoiled"
     body = f"Your {lot.quantity_kg:.0f} kg {lot.crop_code} lot passed its shelf life and is now marked SPOILED."
     payload = {"lot_id": lot.id, "remaining_hours": 0.0}
-    alert = repo.insert_alert(
-        engine,
+    return repo.insert_alert(
+        conn,
         lot_id=lot.id,
         farmer_id=lot.farmer_id,
         kind="SPOILED",
@@ -187,16 +185,20 @@ def _create_spoiled_alert(engine: Engine, lot: repo.LotRecord) -> repo.AlertReco
         payload=payload,
         dedup_key=f"{lot.farmer_id}:{lot.id}:SPOILED",
     )
-    _notify(alert)
-    return alert
 
 
-def _maybe_alert(engine: Engine, prev_status: Status | None, lot: repo.LotRecord) -> None:
+def _maybe_alert(conn: repo.Bind, prev_status: Status | None, lot: repo.LotRecord) -> repo.AlertRecord | None:
+    """Write the AT_RISK or SPOILED alert if this check is that transition.
+
+    Returns the new alert (None if no transition, or a duplicate). The
+    caller sends it with `_notify` only after its transaction commits.
+    """
     new_status = Status(lot.status)
     if status_module.should_alert(prev_status, new_status):
-        _create_at_risk_alert(engine, lot)
-    elif new_status == Status.SPOILED and prev_status != Status.SPOILED:
-        _create_spoiled_alert(engine, lot)
+        return _create_at_risk_alert(conn, lot)
+    if new_status == Status.SPOILED and prev_status != Status.SPOILED:
+        return _create_spoiled_alert(conn, lot)
+    return None
 
 
 def create_lot(
@@ -219,39 +221,45 @@ def create_lot(
     if crop is None:
         raise HTTPException(422, f"Unknown crop_code {crop_code!r}. Valid codes: {sorted(crops)}")
 
-    elapsed = shelf_life.elapsed_hours_since_last_check(harvested_at, None, now)
+    try:
+        elapsed = shelf_life.elapsed_hours_since_last_check(harvested_at, None, now)
+    except ValueError as exc:  # harvested_at in the future, or without a timezone
+        raise HTTPException(422, f"Invalid harvested_at: {exc}") from exc
     temp_c, temp_source, freshness_used, remaining, new_status = _compute_check(
         crop, storage_mode, lat, lng, temperature_c, 0.0, elapsed
     )
     spoil_eta = now + timedelta(hours=remaining)
 
-    lot = repo.insert_lot(
-        engine,
-        farmer_id=farmer_id,
-        crop_code=crop_code,
-        quantity_kg=quantity_kg,
-        harvested_at=harvested_at,
-        lat=lat,
-        lng=lng,
-        storage_mode=storage_mode,
-        floor_price_per_kg=floor_price_per_kg,
-        freshness_used=freshness_used,
-        remaining_hours=remaining,
-        spoil_eta=spoil_eta,
-        status=new_status.value,
-        last_checked_at=now,
-    )
-    repo.insert_check(
-        engine,
-        lot_id=lot.id,
-        temperature_c=temp_c,
-        temp_source=temp_source,
-        elapsed_hours=elapsed,
-        freshness_used=freshness_used,
-        remaining_hours=remaining,
-        status=new_status.value,
-    )
-    _maybe_alert(engine, None, lot)
+    # The lot, its first check row and any alert commit together or not at all.
+    with engine.begin() as conn:
+        lot = repo.insert_lot(
+            conn,
+            farmer_id=farmer_id,
+            crop_code=crop_code,
+            quantity_kg=quantity_kg,
+            harvested_at=harvested_at,
+            lat=lat,
+            lng=lng,
+            storage_mode=storage_mode,
+            floor_price_per_kg=floor_price_per_kg,
+            freshness_used=freshness_used,
+            remaining_hours=remaining,
+            spoil_eta=spoil_eta,
+            status=new_status.value,
+            last_checked_at=now,
+        )
+        repo.insert_check(
+            conn,
+            lot_id=lot.id,
+            temperature_c=temp_c,
+            temp_source=temp_source,
+            elapsed_hours=elapsed,
+            freshness_used=freshness_used,
+            remaining_hours=remaining,
+            status=new_status.value,
+        )
+        alert = _maybe_alert(conn, None, lot)
+    _notify(alert)  # only after the commit, so a push never announces a rolled-back alert
     return lot
 
 
@@ -315,27 +323,31 @@ def _apply_check(
     )
     spoil_eta = checked_at + timedelta(hours=remaining)
 
-    updated = repo.update_lot_after_check(
-        engine,
-        lot.id,
-        lot.farmer_id,
-        freshness_used=freshness_used,
-        remaining_hours=remaining,
-        spoil_eta=spoil_eta,
-        status=new_status.value,
-        last_checked_at=checked_at,
-    )
-    repo.insert_check(
-        engine,
-        lot_id=lot.id,
-        temperature_c=temp_c,
-        temp_source=temp_source,
-        elapsed_hours=elapsed_hours,
-        freshness_used=freshness_used,
-        remaining_hours=remaining,
-        status=new_status.value,
-    )
-    _maybe_alert(engine, prev_status, updated)
+    # The lot update, its check row and any alert commit together or not at
+    # all, so a failure can never leave a new status with no history or no alert.
+    with engine.begin() as conn:
+        updated = repo.update_lot_after_check(
+            conn,
+            lot.id,
+            lot.farmer_id,
+            freshness_used=freshness_used,
+            remaining_hours=remaining,
+            spoil_eta=spoil_eta,
+            status=new_status.value,
+            last_checked_at=checked_at,
+        )
+        repo.insert_check(
+            conn,
+            lot_id=lot.id,
+            temperature_c=temp_c,
+            temp_source=temp_source,
+            elapsed_hours=elapsed_hours,
+            freshness_used=freshness_used,
+            remaining_hours=remaining,
+            status=new_status.value,
+        )
+        alert = _maybe_alert(conn, prev_status, updated)
+    _notify(alert)  # only after the commit
     return updated
 
 
@@ -398,14 +410,15 @@ def simulate(
 
 def _run_check_if_stale(engine: Engine, now: datetime) -> None:
     """Check-on-read safety net: a sleeping host can skip scheduler runs, so
-    GET /rescue/lots and GET /rescue/alerts run the check themselves if the
-    newest check is older than CR_CHECK_INTERVAL_HOURS.
+    GET /rescue/lots and GET /rescue/alerts run the check themselves if any
+    open lot's last check is older than CR_CHECK_INTERVAL_HOURS. (The oldest,
+    not the newest: one freshly registered lot must not hide an overdue one.)
     """
     lots = repo.list_active_lots(engine)
     if not lots:
         return
-    newest = max(lot.last_checked_at for lot in lots)
-    if now - newest > timedelta(hours=settings.check_interval_hours):
+    oldest = min(lot.last_checked_at for lot in lots)
+    if now - oldest > timedelta(hours=settings.check_interval_hours):
         run_check(engine, now=now)
 
 
