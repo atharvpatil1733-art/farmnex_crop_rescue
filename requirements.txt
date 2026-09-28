@@ -1,0 +1,13 @@
+# Runtime: add these lines to the main backend's requirements
+fastapi>=0.110
+pydantic>=2.6
+pydantic-settings>=2.2
+sqlalchemy>=2.0
+psycopg[binary]>=3.1
+apscheduler>=3.10,<4
+httpx>=0.27            # only used if CR_USE_OPEN_METEO=true
+
+# Dev / test only: NOT needed in the main backend
+uvicorn[standard]>=0.29
+pytest>=8.0
+ruff>=0.4

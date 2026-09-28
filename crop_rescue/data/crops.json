@@ -1,0 +1,14 @@
+{
+  "source": "Hardenburg, Watada & Wang (1986), The Commercial Storage of Fruits, Vegetables, and Florist and Nursery Stocks, USDA-ARS Agriculture Handbook 66, Table 1 as reprinted in University of Maine Cooperative Extension Bulletin #4135 (https://extension.umaine.edu/publications/4135e/)",
+  "method": "ref_life_hours = LOWER bound of 'approximate storage life' at the recommended storage temperature; ref_temp_c = midpoint of the recommended temperature range converted from Fahrenheit.",
+  "crops": [
+    {"code": "tomato",      "name_en": "Tomato",      "name_mr": "टोमॅटो",       "table_row": "Tomatoes, mature green", "recommended_f": "55-70", "ref_temp_c": 17.0, "storage_life_in_table": "1-3 weeks",  "ref_life_hours": 168, "source": "USDA AH-66 Table 1 via UMaine Bulletin #4135"},
+    {"code": "spinach",     "name_en": "Spinach",     "name_mr": "पालक",         "table_row": "Spinach",                "recommended_f": "32",    "ref_temp_c": 0.0,  "storage_life_in_table": "10-14 days", "ref_life_hours": 240, "source": "USDA AH-66 Table 1 via UMaine Bulletin #4135"},
+    {"code": "okra",        "name_en": "Okra",        "name_mr": "भेंडी",        "table_row": "Okra",                   "recommended_f": "45-50", "ref_temp_c": 8.6,  "storage_life_in_table": "7-10 days",  "ref_life_hours": 168, "source": "USDA AH-66 Table 1 via UMaine Bulletin #4135"},
+    {"code": "brinjal",     "name_en": "Brinjal",     "name_mr": "वांगी",        "table_row": "Eggplant",               "recommended_f": "46-54", "ref_temp_c": 10.0, "storage_life_in_table": "1 week",     "ref_life_hours": 168, "source": "USDA AH-66 Table 1 via UMaine Bulletin #4135"},
+    {"code": "cauliflower", "name_en": "Cauliflower", "name_mr": "फुलकोबी",      "table_row": "Cauliflower",            "recommended_f": "32",    "ref_temp_c": 0.0,  "storage_life_in_table": "3-4 weeks",  "ref_life_hours": 504, "source": "USDA AH-66 Table 1 via UMaine Bulletin #4135"},
+    {"code": "grapes",      "name_en": "Grapes",      "name_mr": "द्राक्षे",      "table_row": "Grapes, American",       "recommended_f": "31-32", "ref_temp_c": -0.3, "storage_life_in_table": "2-8 weeks",  "ref_life_hours": 336, "source": "USDA AH-66 Table 1 via UMaine Bulletin #4135", "note": "Table row is American (labrusca) grapes; Maharashtra grows mostly vinifera. Approximation; lower bound keeps it conservative."},
+    {"code": "capsicum",    "name_en": "Capsicum",    "name_mr": "ढोबळी मिरची",  "table_row": "Peppers, sweet",         "recommended_f": "45-55", "ref_temp_c": 10.0, "storage_life_in_table": "2-3 weeks",  "ref_life_hours": 336, "source": "USDA AH-66 Table 1 via UMaine Bulletin #4135"},
+    {"code": "cucumber",    "name_en": "Cucumber",    "name_mr": "काकडी",        "table_row": "Cucumbers",              "recommended_f": "50-55", "ref_temp_c": 11.4, "storage_life_in_table": "10-14 days", "ref_life_hours": 240, "source": "USDA AH-66 Table 1 via UMaine Bulletin #4135"}
+  ]
+}

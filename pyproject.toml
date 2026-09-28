@@ -1,0 +1,13 @@
+[project]
+name = "farmnex-crop-rescue"
+version = "0.1.0"
+description = "FarmNex Crop Rescue: shelf-life clock, 48-hour spoilage alerts and nearby-buyer matching (SIH 2026 prototype)"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
