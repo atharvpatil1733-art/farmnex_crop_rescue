@@ -19,12 +19,12 @@ Build one phase per `/build-phase <n>` and stop after each one. Rough times assu
 - [x] tests against the **test** Postgres only (`CR_TEST_DATABASE_URL`, docker compose `db` service); skipped if not set
 
 ## Phase 4: Router, service and scheduler (≈2 h) · skills: drop-in-contract, shelf-life-engine · SPEC: Who is the farmer, API contract, Scheduler, Local development, Tests
-- [ ] `deps.py` (`current_farmer_id`), `schemas.py` (with examples), `service.py` (with ownership checks, the `on_alert` hook and check-on-read), thin `api.py` (all endpoints, with summaries), crash-proof `scheduler.py`
-- [ ] `crop_rescue/__init__.py` public surface
-- [ ] `dev_app.py` (local testing only)
-- [ ] API test: create → simulate → alert → matches → sold → no more alerts
-- [ ] mounting test: host auth dependency wraps the router (401 when it fails)
-- [ ] ownership test (other farmer → 404), nested-placement test (`app/modules/crop_rescue`), scheduler-safety test, simulate-switch test
+- [x] `deps.py` (`current_farmer_id`), `schemas.py` (with examples), `service.py` (with ownership checks, the `on_alert` hook and check-on-read), thin `api.py` (all endpoints, with summaries), crash-proof `scheduler.py`
+- [x] `crop_rescue/__init__.py` public surface
+- [x] `dev_app.py` (local testing only)
+- [x] API test: create → simulate → alert → matches → sold → no more alerts
+- [x] mounting test: host auth dependency wraps the router (401 when it fails)
+- [x] ownership test (other farmer → 404), nested-placement test (`app/modules/crop_rescue`), scheduler-safety test, simulate-switch test
 
 ## Phase 5: Flutter client and integration docs (≈1 h) · skills: drop-in-contract · SPEC: API contract, INTEGRATION.md
 - [ ] `integration/flutter/crop_rescue_api.dart` (takes the app's existing Dio, no `farmerId` params)

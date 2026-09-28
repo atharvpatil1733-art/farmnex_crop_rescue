@@ -408,6 +408,14 @@ def mark_alert_read(engine: Engine, alert_id: str, farmer_id: str, read_at: date
     return _alert_from_row(row) if row is not None else None
 
 
+def list_checks_for_lot(engine: Engine, lot_id: str) -> list[CheckRecord]:
+    """A lot's full audit trail, newest first."""
+    stmt = sa.select(cr_checks).where(cr_checks.c.lot_id == lot_id).order_by(cr_checks.c.checked_at.desc())
+    with engine.connect() as conn:
+        rows = conn.execute(stmt).all()
+    return [_check_from_row(row) for row in rows]
+
+
 def list_buyers_for_crop(engine: Engine, crop_code: str) -> list[BuyerRecord]:
     """Candidate buyers for a crop, read only from `cr_buyer_pool`."""
     stmt = sa.select(cr_buyer_pool).where(cr_buyer_pool.c.crop_code == crop_code)

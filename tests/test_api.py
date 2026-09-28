@@ -1,0 +1,151 @@
+"""API test: create -> simulate -> alert -> matches -> sold -> no more alerts.
+
+DB-backed: skipped automatically (via the `db` fixture) if
+CR_TEST_DATABASE_URL isn't set.
+"""
+
+from __future__ import annotations
+
+import uuid
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+import crop_rescue
+from crop_rescue import current_farmer_id, router
+
+
+@pytest.fixture
+def client(db):
+    crop_rescue.configure(engine=db)
+    app = FastAPI()
+    app.include_router(router)
+    return TestClient(app)
+
+
+def _as_farmer(client: TestClient, farmer_id: str) -> TestClient:
+    client.app.dependency_overrides[current_farmer_id] = lambda: farmer_id
+    return client
+
+
+def _seed_tomato_buyer(db, buyer_id: str = "test-api-buyer") -> None:
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            f"""
+            INSERT INTO cr_demo_buyers
+                (buyer_id, buyer_name, crop_code, price_per_kg, max_qty_kg, lat, lng, reliability)
+            VALUES
+                ('{buyer_id}', 'Test API Buyer', 'tomato', 20.0, 600, 18.53, 73.86, 0.9)
+            """
+        )
+
+
+def test_full_lifecycle_create_simulate_alert_matches_sold(db, client):
+    farmer_id = f"farmer-{uuid.uuid4()}"
+    _as_farmer(client, farmer_id)
+    _seed_tomato_buyer(db)
+
+    # 1. create: a fresh tomato lot at 30 °C, harvested now.
+    create_response = client.post(
+        "/rescue/lots",
+        json={
+            "crop_code": "tomato",
+            "quantity_kg": 500,
+            "harvested_at": "2026-09-28T06:00:00Z",
+            "lat": 18.5204,
+            "lng": 73.8567,
+            "storage_mode": "ambient",
+            "floor_price_per_kg": 10,
+            "temperature_c": 30,
+        },
+    )
+    assert create_response.status_code == 201, create_response.text
+    lot = create_response.json()
+    assert lot["status"] == "FRESH"
+    assert lot["remaining_hours"] == pytest.approx(68.2, abs=0.5)
+    lot_id = lot["id"]
+
+    # 2. simulate: fast-forward 36 h without waiting.
+    simulate_response = client.post("/rescue/simulate", json={"hours": 36, "lot_id": lot_id})
+    assert simulate_response.status_code == 200, simulate_response.text
+    simulated_lot = simulate_response.json()["lots"][0]
+    assert simulated_lot["status"] == "AT_RISK"
+    assert simulated_lot["remaining_hours"] > 0
+
+    # 3. alert: an AT_RISK alert now exists.
+    alerts_response = client.get("/rescue/alerts")
+    assert alerts_response.status_code == 200
+    alerts = alerts_response.json()
+    assert len(alerts) == 1
+    assert alerts[0]["kind"] == "AT_RISK"
+    assert alerts[0]["payload"]["lot_id"] == lot_id
+
+    # 4. matches: the top buyers for this lot.
+    matches_response = client.get(f"/rescue/lots/{lot_id}/matches")
+    assert matches_response.status_code == 200
+    matches = matches_response.json()
+    assert len(matches) == 1
+    assert matches[0]["buyer_id"] == "test-api-buyer"
+    assert "₹" in matches[0]["reason"]
+
+    # 5. sold: mark it sold.
+    sold_response = client.post(f"/rescue/lots/{lot_id}/sold")
+    assert sold_response.status_code == 200
+    assert sold_response.json()["status"] == "SOLD"
+
+    # 6. no more alerts: running the engine again creates nothing new.
+    check_response = client.post("/rescue/check")
+    assert check_response.status_code == 200
+    assert check_response.json()["checked"] == 0  # SOLD lots are not active
+
+    alerts_after = client.get("/rescue/alerts").json()
+    assert len(alerts_after) == 1  # still just the one AT_RISK alert
+
+
+def test_matches_returns_409_when_lot_is_not_at_risk(client):
+    farmer_id = f"farmer-{uuid.uuid4()}"
+    _as_farmer(client, farmer_id)
+
+    create_response = client.post(
+        "/rescue/lots",
+        json={
+            "crop_code": "tomato",
+            "quantity_kg": 500,
+            "harvested_at": "2026-09-28T06:00:00Z",
+            "lat": 18.5204,
+            "lng": 73.8567,
+            "temperature_c": 20,  # cool enough to stay FRESH
+        },
+    )
+    lot_id = create_response.json()["id"]
+    assert create_response.json()["status"] == "FRESH"
+
+    response = client.get(f"/rescue/lots/{lot_id}/matches")
+
+    assert response.status_code == 409
+
+
+def test_create_lot_rejects_unknown_crop_code(client):
+    farmer_id = f"farmer-{uuid.uuid4()}"
+    _as_farmer(client, farmer_id)
+
+    response = client.post(
+        "/rescue/lots",
+        json={
+            "crop_code": "durian",
+            "quantity_kg": 500,
+            "harvested_at": "2026-09-28T06:00:00Z",
+            "lat": 18.5204,
+            "lng": 73.8567,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_health_reports_db_true_when_configured(client):
+    response = client.get("/rescue/health")
+    assert response.status_code == 200
+    body = response.json()
+    assert body == {"ok": True, "crops": 8, "db": True}

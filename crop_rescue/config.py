@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CR_", env_file=".env", extra="ignore")
 
     # Main database (the team's Supabase). Falls back to the host's DATABASE_URL.
+    # This fallback is for the production engine only; tests never read this
+    # field, only test_database_url below.
     database_url: SecretStr | None = Field(
         default=None, validation_alias=AliasChoices("CR_DATABASE_URL", "DATABASE_URL")
     )
