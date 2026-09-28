@@ -5,7 +5,7 @@ argument-hint: <phase number 1-6>
 
 Build **Phase $ARGUMENTS** from `docs/BUILD_PLAN.md`, and only that phase.
 
-1. Read CLAUDE.md and the phase section in docs/BUILD_PLAN.md.
+1. Read the phase section in docs/BUILD_PLAN.md, and **only** the `docs/SPEC.md` sections it lists.
 2. Load the skills the phase lists.
 3. Before writing code, list the files you'll create or change in 3–6 bullets.
 4. Implement it. Write the phase's tests alongside the code.

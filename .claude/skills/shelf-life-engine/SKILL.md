@@ -48,7 +48,7 @@ If your implementation doesn't reproduce these to 0.1 h, it's wrong.
 
 ## Matching (core/matching.py)
 
-The pipeline is filter, then score, then take the top N. Follow the steps in CLAUDE.md §5. Keep in mind:
+The pipeline is filter, then score, then take the top N. Follow the steps in docs/SPEC.md "Algorithm" §5. Keep in mind:
 - Haversine × road factor. Don't call any maps API.
 - Min–max normalise each score component across the candidates. If all candidates are equal, that component is 1.0 (avoid divide-by-zero).
 - The `reason` string is generated from the numbers, one line, e.g. `₹18.4/kg after transport · 12 km · 30 h to spare`.
