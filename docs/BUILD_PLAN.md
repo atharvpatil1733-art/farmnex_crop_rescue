@@ -9,8 +9,8 @@ Build one phase per `/build-phase <n>` and stop after each one. Rough times assu
 - [x] tests: sanity-number table, cold cap, accumulation, status thresholds, the ≥48 h notice property
 
 ## Phase 2: Matching (≈1 h) · skills: shelf-life-engine · SPEC: Algorithm §5, Tests
-- [ ] `crop_rescue/core/matching.py`: haversine, feasibility, net price, floor, scoring, reasons
-- [ ] tests: radius, too-slow, below-floor, ordering, top-N, empty candidates
+- [x] `crop_rescue/core/matching.py`: haversine, feasibility, net price, floor, scoring, reasons
+- [x] tests: radius, too-slow, below-floor, ordering, top-N, empty candidates
 
 ## Phase 3: Database (≈1 h) · skills: drop-in-contract · SPEC: Database, Database connection, Tests
 - [ ] `migrations/001_crop_rescue.sql` (idempotent, `BEGIN/COMMIT`, only `cr_` objects, RLS enabled on `cr_` tables) and `migrations/002_demo_seed.sql` (10 DEMO buyers around Pune, Chakan and Nashik)
