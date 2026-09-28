@@ -13,10 +13,10 @@ Build one phase per `/build-phase <n>` and stop after each one. Rough times assu
 - [x] tests: radius, too-slow, below-floor, ordering, top-N, empty candidates
 
 ## Phase 3: Database (≈1 h) · skills: drop-in-contract · SPEC: Database, Database connection, Tests
-- [ ] `migrations/001_crop_rescue.sql` (idempotent, `BEGIN/COMMIT`, only `cr_` objects, RLS enabled on `cr_` tables) and `migrations/002_demo_seed.sql` (10 DEMO buyers around Pune, Chakan and Nashik)
-- [ ] `tests/test_migrations_safe.py` (no DB needed): fails on DROP/TRUNCATE/GRANT/REVOKE/CREATE EXTENSION or any non-`cr_` object
-- [ ] `crop_rescue/db.py` (lazy engine, `configure()`), `crop_rescue/repository.py`
-- [ ] tests against the **test** Postgres only (`CR_TEST_DATABASE_URL`, docker compose `db` service); skipped if not set
+- [x] `migrations/001_crop_rescue.sql` (idempotent, `BEGIN/COMMIT`, only `cr_` objects, RLS enabled on `cr_` tables) and `migrations/002_demo_seed.sql` (10 DEMO buyers around Pune, Chakan and Nashik)
+- [x] `tests/test_migrations_safe.py` (no DB needed): fails on DROP/TRUNCATE/GRANT/REVOKE/CREATE EXTENSION or any non-`cr_` object
+- [x] `crop_rescue/db.py` (lazy engine, `configure()`), `crop_rescue/repository.py`
+- [x] tests against the **test** Postgres only (`CR_TEST_DATABASE_URL`, docker compose `db` service); skipped if not set
 
 ## Phase 4: Router, service and scheduler (≈2 h) · skills: drop-in-contract, shelf-life-engine · SPEC: Who is the farmer, API contract, Scheduler, Local development, Tests
 - [ ] `deps.py` (`current_farmer_id`), `schemas.py` (with examples), `service.py` (with ownership checks, the `on_alert` hook and check-on-read), thin `api.py` (all endpoints, with summaries), crash-proof `scheduler.py`
