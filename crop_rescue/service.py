@@ -358,9 +358,20 @@ def run_check(engine: Engine, *, now: datetime) -> dict:
 
 
 def simulate(
-    engine: Engine, farmer_id: str, *, hours: float, temperature_c: float | None, lot_id: str | None
+    engine: Engine,
+    farmer_id: str,
+    *,
+    hours: float,
+    temperature_c: float | None,
+    lot_id: str | None,
+    now: datetime,
 ) -> list[repo.LotRecord]:
-    """Demo button: advance the current farmer's lots by `hours` without waiting.
+    """Demo button: charge `hours` of ageing to the current farmer's open lots right now.
+
+    The check is stamped with the real `now`, never a future time, so the
+    next real check (scheduler, POST /check, check-on-read) carries on from
+    here normally. SOLD and SPOILED lots are returned unchanged: the engine
+    never touches them.
 
     With no `lot_id` and no open lots, this deliberately returns an empty
     list rather than an error: "nothing to simulate" isn't a failure.
@@ -371,13 +382,16 @@ def simulate(
             raise HTTPException(404, "Lot not found")
         lots = [lot]
     else:
-        lots = [lot for lot in repo.list_lots(engine, farmer_id) if lot.status not in ("SOLD", "SPOILED")]
+        lots = repo.list_lots(engine, farmer_id)
 
     updated_lots = []
     for lot in lots:
-        checked_at = lot.last_checked_at + timedelta(hours=hours)
+        if lot.status in (Status.SOLD.value, Status.SPOILED.value):
+            if lot_id is not None:
+                updated_lots.append(lot)
+            continue
         updated_lots.append(
-            _apply_check(engine, lot, elapsed_hours=hours, temperature_c=temperature_c, checked_at=checked_at)
+            _apply_check(engine, lot, elapsed_hours=hours, temperature_c=temperature_c, checked_at=now)
         )
     return updated_lots
 

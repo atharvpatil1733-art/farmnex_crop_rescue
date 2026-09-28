@@ -151,6 +151,7 @@ def simulate(body: SimulateRequest, farmer_id: str = Depends(current_farmer_id))
         hours=body.hours,
         temperature_c=body.temperature_c,
         lot_id=body.lot_id,
+        now=datetime.now(timezone.utc),
     )
     return SimulateOut(lots=[LotOut.model_validate(lot) for lot in lots])
 

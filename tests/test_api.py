@@ -7,6 +7,7 @@ CR_TEST_DATABASE_URL isn't set.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from fastapi import FastAPI
@@ -14,6 +15,12 @@ from fastapi.testclient import TestClient
 
 import crop_rescue
 from crop_rescue import current_farmer_id, router
+
+
+def _harvested_now() -> str:
+    """Harvested this instant. A fixed date would age the lot in real time
+    (the first check counts from harvested_at), making tests time-dependent."""
+    return datetime.now(timezone.utc).isoformat()
 
 
 @pytest.fixture
@@ -52,7 +59,7 @@ def test_full_lifecycle_create_simulate_alert_matches_sold(db, client):
         json={
             "crop_code": "tomato",
             "quantity_kg": 500,
-            "harvested_at": "2026-09-28T06:00:00Z",
+            "harvested_at": _harvested_now(),
             "lat": 18.5204,
             "lng": 73.8567,
             "storage_mode": "ambient",
@@ -112,7 +119,7 @@ def test_matches_returns_409_when_lot_is_not_at_risk(client):
         json={
             "crop_code": "tomato",
             "quantity_kg": 500,
-            "harvested_at": "2026-09-28T06:00:00Z",
+            "harvested_at": _harvested_now(),
             "lat": 18.5204,
             "lng": 73.8567,
             "temperature_c": 20,  # cool enough to stay FRESH
@@ -135,7 +142,7 @@ def test_create_lot_rejects_unknown_crop_code(client):
         json={
             "crop_code": "durian",
             "quantity_kg": 500,
-            "harvested_at": "2026-09-28T06:00:00Z",
+            "harvested_at": _harvested_now(),
             "lat": 18.5204,
             "lng": 73.8567,
         },
@@ -149,3 +156,46 @@ def test_health_reports_db_true_when_configured(client):
     assert response.status_code == 200
     body = response.json()
     assert body == {"ok": True, "crops": 8, "db": True}
+
+
+def _create_tomato_lot(client: TestClient, temperature_c: float = 30) -> dict:
+    response = client.post(
+        "/rescue/lots",
+        json={
+            "crop_code": "tomato",
+            "quantity_kg": 500,
+            "harvested_at": _harvested_now(),
+            "lat": 18.5204,
+            "lng": 73.8567,
+            "temperature_c": temperature_c,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def test_real_check_after_simulate_does_not_fail(client):
+    """Regression: simulate must never stamp a future last_checked_at, or the
+    next real check would reject it and POST /rescue/check would 500."""
+    _as_farmer(client, f"farmer-{uuid.uuid4()}")
+    lot = _create_tomato_lot(client)
+
+    client.post("/rescue/simulate", json={"hours": 36, "lot_id": lot["id"]})
+    check_response = client.post("/rescue/check")
+
+    assert check_response.status_code == 200, check_response.text
+    detail = client.get(f"/rescue/lots/{lot['id']}").json()
+    assert detail["status"] == "AT_RISK"
+    assert detail["remaining_hours"] == pytest.approx(68.2 - 36, abs=0.5)
+
+
+def test_simulate_never_touches_a_sold_lot(client):
+    _as_farmer(client, f"farmer-{uuid.uuid4()}")
+    lot = _create_tomato_lot(client)
+    client.post(f"/rescue/lots/{lot['id']}/sold")
+
+    response = client.post("/rescue/simulate", json={"hours": 100, "lot_id": lot["id"]})
+
+    assert response.status_code == 200
+    assert response.json()["lots"][0]["status"] == "SOLD"
+    assert client.get(f"/rescue/lots/{lot['id']}").json()["status"] == "SOLD"

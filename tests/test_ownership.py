@@ -8,6 +8,7 @@ CR_TEST_DATABASE_URL isn't set.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from fastapi import FastAPI
@@ -15,6 +16,12 @@ from fastapi.testclient import TestClient
 
 import crop_rescue
 from crop_rescue import current_farmer_id, router
+
+
+def _harvested_now() -> str:
+    """Harvested this instant. A fixed date would age the lot in real time
+    (the first check counts from harvested_at), making tests time-dependent."""
+    return datetime.now(timezone.utc).isoformat()
 
 
 @pytest.fixture
@@ -37,7 +44,7 @@ def _create_lot(app: FastAPI, farmer_id: str) -> dict:
         json={
             "crop_code": "tomato",
             "quantity_kg": 500,
-            "harvested_at": "2026-09-28T06:00:00Z",
+            "harvested_at": _harvested_now(),
             "lat": 18.5204,
             "lng": 73.8567,
             "temperature_c": 30,
@@ -112,7 +119,7 @@ def test_farmer_id_in_the_post_body_is_ignored():
         {
             "crop_code": "tomato",
             "quantity_kg": 500,
-            "harvested_at": "2026-09-28T06:00:00Z",
+            "harvested_at": _harvested_now(),
             "lat": 18.5204,
             "lng": 73.8567,
             "farmer_id": "someone-elses-id",
