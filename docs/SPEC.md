@@ -48,6 +48,10 @@ remaining_hours  = max(0, (1 - freshness_used) * life_hours(T_now))
 spoil_eta        = now + remaining_hours
 ```
 
+`elapsed_hours` is measured from `last_checked_at`. **The first check on a new lot counts from `harvested_at`** (entered by the farmer in the existing app), not from registration time, because produce starts ageing when it leaves the field. A lot harvested 36 h ago starts with 36 h already used. `harvested_at` in the future is rejected. Code: `core/shelf_life.py::elapsed_hours_since_last_check`.
+
+Crop Rescue stores no photos. Lot photos stay in the existing Supabase tables, and this module never reads or writes them.
+
 Accumulation (rather than simply subtracting hours) is what lets a hot day eat freshness faster than a cool night. That is the one idea judges should take away.
 
 ### 3. Status rules — `core/status.py`
@@ -279,7 +283,7 @@ A 15-line FastAPI app that does `include_router(router)` plus the scheduler life
 4. **Flutter:** copy `integration/flutter/crop_rescue_api.dart` into the app. Create it with the app's existing Dio, `CropRescueApi(dio)`, so the base URL and login token carry over. Call `fetchAlerts(farmerId)` on the farmer home screen every 30 s.
 5. **Real buyers (later):** redefine the `cr_buyer_pool` view as a `SELECT` over the main app's real buyer tables. No Python changes are needed.
 
-Also include a `curl` smoke test for each endpoint against the main backend URL, using whatever auth header the backend already uses. Add a note: set `CR_ENABLE_SIMULATE=false` once the demo is over.
+Also include a `curl` smoke test for each endpoint against the main backend URL, using whatever auth header the backend already uses. Add a note: set `CR_ENABLE_SIMULATE=false` once the demo is over. Add a troubleshooting note: settings are validated at import (fail-fast), so if the backend won't start after adding the module, check the `CR_*` env vars (e.g. `CR_Q10=abc` raises a `ValidationError` naming the bad variable).
 
 ---
 
