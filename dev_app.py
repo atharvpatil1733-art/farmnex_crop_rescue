@@ -13,6 +13,7 @@ from crop_rescue import router, start_scheduler, stop_scheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Start the scheduler on development app startup and stop it after serving."""
     start_scheduler()
     yield
     stop_scheduler()

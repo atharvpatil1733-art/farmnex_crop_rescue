@@ -13,14 +13,17 @@ from crop_rescue import router
 
 
 def _fake_auth_that_fails():
+    """Simulate a host authentication dependency that rejects the request."""
     raise HTTPException(401, "not logged in")
 
 
 def _fake_auth_that_succeeds():
+    """Simulate a host authentication dependency returning a farmer identity."""
     return "farmer-mounted"
 
 
 def test_host_auth_dependency_rejects_when_it_fails():
+    """Verify that the host's authentication failure blocks crop catalog access."""
     app = FastAPI()
     app.include_router(router, dependencies=[Depends(_fake_auth_that_fails)])
     client = TestClient(app)
@@ -31,6 +34,7 @@ def test_host_auth_dependency_rejects_when_it_fails():
 
 
 def test_host_auth_dependency_allows_through_when_it_succeeds():
+    """Verify that successful host authentication permits access to the crop catalog."""
     app = FastAPI()
     app.include_router(router, dependencies=[Depends(_fake_auth_that_succeeds)])
     client = TestClient(app)
@@ -42,6 +46,7 @@ def test_host_auth_dependency_allows_through_when_it_succeeds():
 
 
 def test_router_never_defines_its_own_health_or_docs_route():
+    """Verify that the router does not claim the host's root, health, or docs paths."""
     paths = {r.path for r in router.routes}
     assert "/" not in paths
     assert "/health" not in paths

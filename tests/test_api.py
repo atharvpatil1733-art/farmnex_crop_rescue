@@ -25,6 +25,7 @@ def _harvested_now() -> str:
 
 @pytest.fixture
 def client(db):
+    """Mount the router in a test client using the isolated database engine."""
     crop_rescue.configure(engine=db)
     app = FastAPI()
     app.include_router(router)
@@ -32,11 +33,13 @@ def client(db):
 
 
 def _as_farmer(client: TestClient, farmer_id: str) -> TestClient:
+    """Override the client's farmer dependency and return the same client."""
     client.app.dependency_overrides[current_farmer_id] = lambda: farmer_id
     return client
 
 
 def _seed_tomato_buyer(db, buyer_id: str = "test-api-buyer") -> None:
+    """Insert a nearby tomato buyer into the isolated database for matching tests."""
     with db.begin() as conn:
         conn.exec_driver_sql(
             f"""
@@ -49,6 +52,7 @@ def _seed_tomato_buyer(db, buyer_id: str = "test-api-buyer") -> None:
 
 
 def test_full_lifecycle_create_simulate_alert_matches_sold(db, client):
+    """Verify creation, ageing, alerts, matching, and exclusion from checks after sale."""
     farmer_id = f"farmer-{uuid.uuid4()}"
     _as_farmer(client, farmer_id)
     _seed_tomato_buyer(db)
@@ -111,6 +115,7 @@ def test_full_lifecycle_create_simulate_alert_matches_sold(db, client):
 
 
 def test_matches_returns_409_when_lot_is_not_at_risk(client):
+    """Verify that requesting buyers for a FRESH lot returns HTTP 409."""
     farmer_id = f"farmer-{uuid.uuid4()}"
     _as_farmer(client, farmer_id)
 
@@ -134,6 +139,7 @@ def test_matches_returns_409_when_lot_is_not_at_risk(client):
 
 
 def test_create_lot_rejects_unknown_crop_code(client):
+    """Verify that an unsupported crop code returns HTTP 422."""
     farmer_id = f"farmer-{uuid.uuid4()}"
     _as_farmer(client, farmer_id)
 
@@ -152,6 +158,7 @@ def test_create_lot_rejects_unknown_crop_code(client):
 
 
 def test_health_reports_db_true_when_configured(client):
+    """Verify that health reports eight crops and a reachable test database."""
     response = client.get("/rescue/health")
     assert response.status_code == 200
     body = response.json()
@@ -159,6 +166,7 @@ def test_health_reports_db_true_when_configured(client):
 
 
 def _create_tomato_lot(client: TestClient, temperature_c: float = 30) -> dict:
+    """Create a freshly harvested tomato lot and return the successful JSON response."""
     response = client.post(
         "/rescue/lots",
         json={
@@ -190,6 +198,7 @@ def test_real_check_after_simulate_does_not_fail(client):
 
 
 def test_simulate_never_touches_a_sold_lot(client):
+    """Verify that simulating a sold lot preserves its SOLD status."""
     _as_farmer(client, f"farmer-{uuid.uuid4()}")
     lot = _create_tomato_lot(client)
     client.post(f"/rescue/lots/{lot['id']}/sold")
@@ -209,6 +218,7 @@ def test_failed_check_rolls_back_the_lot_update_and_alert(client, monkeypatch):
     assert lot["status"] == "FRESH"
 
     def fail(*args, **kwargs):
+        """Fail the check insert to exercise transaction rollback."""
         raise RuntimeError("insert_check failed")
 
     monkeypatch.setattr("crop_rescue.repository.insert_check", fail)

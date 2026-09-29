@@ -18,6 +18,7 @@ MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
 
 def _test_database_url() -> str | None:
+    """Read only the test database URL, rejecting URLs containing supabase.com."""
     url = os.environ.get("CR_TEST_DATABASE_URL")
     if url and "supabase.com" in url:
         raise RuntimeError("CR_TEST_DATABASE_URL must never point at a supabase.com database")

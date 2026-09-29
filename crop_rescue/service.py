@@ -128,6 +128,7 @@ def _compute_check(
 
 
 def _create_at_risk_alert(conn: repo.Bind, lot: repo.LotRecord) -> repo.AlertRecord | None:
+    """Insert an AT_RISK alert with buyer matches, returning None for a duplicate."""
     buyers = repo.list_buyers_for_crop(conn, lot.crop_code)
     lot_for_matching = matching.LotForMatching(
         crop_code=lot.crop_code,
@@ -172,6 +173,7 @@ def _create_at_risk_alert(conn: repo.Bind, lot: repo.LotRecord) -> repo.AlertRec
 
 
 def _create_spoiled_alert(conn: repo.Bind, lot: repo.LotRecord) -> repo.AlertRecord | None:
+    """Insert a SPOILED alert with zero remaining hours, or None for a duplicate."""
     title = f"Your {lot.quantity_kg:.0f} kg {lot.crop_code} lot has spoiled"
     body = f"Your {lot.quantity_kg:.0f} kg {lot.crop_code} lot passed its shelf life and is now marked SPOILED."
     payload = {"lot_id": lot.id, "remaining_hours": 0.0}
@@ -264,11 +266,13 @@ def create_lot(
 
 
 def list_lots(engine: Engine, farmer_id: str) -> list[repo.LotRecord]:
+    """Run overdue freshness checks, then return the requested farmer's lots."""
     _run_check_if_stale(engine, datetime.now(timezone.utc))
     return repo.list_lots(engine, farmer_id)
 
 
 def get_lot_detail(engine: Engine, farmer_id: str, lot_id: str) -> tuple[repo.LotRecord, list[repo.CheckRecord]]:
+    """Return an owned lot and its check history, raising HTTP 404 if unavailable."""
     lot = repo.get_lot(engine, lot_id, farmer_id)
     if lot is None:
         raise HTTPException(404, "Lot not found")
@@ -277,6 +281,11 @@ def get_lot_detail(engine: Engine, farmer_id: str, lot_id: str) -> tuple[repo.Lo
 
 
 def get_matches(engine: Engine, farmer_id: str, lot_id: str) -> list[matching.Match]:
+    """Rank buyers for an owned AT_RISK lot.
+
+    Raise HTTP 404 for a missing or unowned lot, or 409 for any other status.
+    Return an empty list when no buyer satisfies the matching constraints.
+    """
     lot = repo.get_lot(engine, lot_id, farmer_id)
     if lot is None:
         raise HTTPException(404, "Lot not found")
@@ -305,6 +314,7 @@ def get_matches(engine: Engine, farmer_id: str, lot_id: str) -> list[matching.Ma
 
 
 def mark_sold(engine: Engine, farmer_id: str, lot_id: str) -> repo.LotRecord:
+    """Mark an owned lot SOLD, raising HTTP 404 if it is missing or unowned."""
     lot = repo.mark_lot_sold(engine, lot_id, farmer_id)
     if lot is None:
         raise HTTPException(404, "Lot not found")
@@ -423,11 +433,13 @@ def _run_check_if_stale(engine: Engine, now: datetime) -> None:
 
 
 def list_alerts(engine: Engine, farmer_id: str, unread_only: bool) -> list[repo.AlertRecord]:
+    """Run overdue checks, then return the farmer's alerts with the unread filter."""
     _run_check_if_stale(engine, datetime.now(timezone.utc))
     return repo.list_alerts(engine, farmer_id, unread_only=unread_only)
 
 
 def mark_alert_read(engine: Engine, farmer_id: str, alert_id: str) -> repo.AlertRecord:
+    """Stamp an owned alert as read now, raising HTTP 404 if unavailable."""
     alert = repo.mark_alert_read(engine, alert_id, farmer_id, read_at=datetime.now(timezone.utc))
     if alert is None:
         raise HTTPException(404, "Alert not found")

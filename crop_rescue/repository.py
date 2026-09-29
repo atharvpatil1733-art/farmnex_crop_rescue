@@ -162,6 +162,7 @@ class BuyerRecord:
 
 
 def _lot_from_row(row: sa.Row) -> LotRecord:
+    """Convert a lot row to a record with a string ID and float quantity and price."""
     m = row._mapping
     return LotRecord(
         id=str(m["id"]),
@@ -183,6 +184,7 @@ def _lot_from_row(row: sa.Row) -> LotRecord:
 
 
 def _check_from_row(row: sa.Row) -> CheckRecord:
+    """Convert a freshness-check row to a record with string check and lot IDs."""
     m = row._mapping
     return CheckRecord(
         id=str(m["id"]),
@@ -198,6 +200,7 @@ def _check_from_row(row: sa.Row) -> CheckRecord:
 
 
 def _alert_from_row(row: sa.Row) -> AlertRecord:
+    """Convert an alert row to a record with string alert and lot IDs."""
     m = row._mapping
     return AlertRecord(
         id=str(m["id"]),
@@ -214,6 +217,7 @@ def _alert_from_row(row: sa.Row) -> AlertRecord:
 
 
 def _buyer_from_row(row: sa.Row) -> BuyerRecord:
+    """Convert a buyer-view row to a record with float price and capacity."""
     m = row._mapping
     return BuyerRecord(
         buyer_id=m["buyer_id"],

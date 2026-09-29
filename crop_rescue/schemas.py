@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 
 def _round1(value: float | None) -> float | None:
+    """Round a value to one decimal place, preserving None for unknown values."""
     return None if value is None else round(value, 1)
 
 
@@ -87,6 +88,7 @@ class CheckOut(BaseModel):
 
     @field_serializer("elapsed_hours", "remaining_hours")
     def _round_hours(self, value: float) -> float:
+        """Serialize elapsed and remaining hours to one decimal place."""
         return round(value, 1)
 
 
@@ -110,6 +112,7 @@ class LotOut(BaseModel):
 
     @field_serializer("remaining_hours")
     def _round_remaining(self, value: float | None) -> float | None:
+        """Serialize remaining hours to one decimal place, preserving None."""
         return _round1(value)
 
 
@@ -133,6 +136,7 @@ class MatchOut(BaseModel):
 
     @field_serializer("travel_hours")
     def _round_travel_hours(self, value: float) -> float:
+        """Serialize estimated travel hours to one decimal place."""
         return round(value, 1)
 
 

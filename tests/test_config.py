@@ -24,12 +24,14 @@ CR_VARS = [
 
 @pytest.fixture
 def clean_env(monkeypatch):
+    """Remove configuration variables and return monkeypatch for isolated overrides."""
     for name in CR_VARS:
         monkeypatch.delenv(name, raising=False)
     return monkeypatch
 
 
 def test_defaults(clean_env):
+    """Verify the documented defaults without environment or dotenv overrides."""
     s = Settings(_env_file=None)
     assert s.database_url is None
     assert s.test_database_url is None
@@ -49,6 +51,7 @@ def test_defaults(clean_env):
 
 
 def test_env_overrides(clean_env):
+    """Verify that CR_ variables override numeric and boolean defaults."""
     clean_env.setenv("CR_Q10", "3")
     clean_env.setenv("CR_ENABLE_SIMULATE", "false")
     s = Settings(_env_file=None)
@@ -57,12 +60,14 @@ def test_env_overrides(clean_env):
 
 
 def test_database_url_falls_back_to_host_database_url(clean_env):
+    """Verify that the runtime database URL can use the host DATABASE_URL fallback."""
     clean_env.setenv("DATABASE_URL", "postgresql+psycopg://host/db")
     s = Settings(_env_file=None)
     assert s.database_url.get_secret_value() == "postgresql+psycopg://host/db"
 
 
 def test_test_database_url_never_falls_back(clean_env):
+    """Verify that runtime database URLs cannot populate the test database setting."""
     clean_env.setenv("CR_DATABASE_URL", "postgresql+psycopg://main/db")
     clean_env.setenv("DATABASE_URL", "postgresql+psycopg://host/db")
     s = Settings(_env_file=None)
@@ -70,6 +75,7 @@ def test_test_database_url_never_falls_back(clean_env):
 
 
 def test_connection_strings_are_hidden_in_repr(clean_env):
+    """Verify that string representations of settings conceal the database password."""
     clean_env.setenv("CR_DATABASE_URL", "postgresql+psycopg://user:hunter2@host/db")
     s = Settings(_env_file=None)
     assert "hunter2" not in repr(s)
