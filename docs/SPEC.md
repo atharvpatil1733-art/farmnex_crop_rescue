@@ -262,7 +262,7 @@ A 15-line FastAPI app that does `include_router(router)` plus the scheduler life
 
 ## INTEGRATION.md must contain exactly these 5 steps
 
-1. **Add the module** to the main backend, for example at `app/modules/crop_rescue/` (any location works because imports are relative). Add the runtime lines from `requirements.txt` to the backend's requirements.
+1. **Add the module** to the main backend, for example at `app/modules/crop_rescue/` (any location works because imports are relative). Add the runtime lines from `requirements.txt` to the backend's `pyproject.toml` **and** `requirements.txt` (FarmNex production installs from `pyproject.toml`).
 2. **Create the tables:** open the main app's Supabase project → SQL Editor → run `migrations/001_crop_rescue.sql`, then `002_demo_seed.sql` for the demo buyers. These only **add** new `cr_` tables. Nothing existing is changed.
 3. **Register the router** in the backend's `main.py`:
    ```python

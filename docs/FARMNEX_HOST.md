@@ -13,13 +13,15 @@ The full host-side guide is `docs/integration/crop-rescue.md` in the farmnex_mai
 | Database driver | **Async** SQLAlchemy + `asyncpg` (`DATABASE_URL=postgresql+asyncpg://…`) | The host must **not** call `configure(engine=engine)` with its engine (it's async; ours is sync). It sets **`CR_DATABASE_URL`** (Supabase session pooler, `postgresql+psycopg://…:5432/postgres?sslmode=require`). Falling back to the host's `DATABASE_URL` fails with `MissingGreenlet` |
 | URL prefix | Everything is under `/api/v2` | Mounted as `include_router(router, prefix="/api/v2", …)` → `/api/v2/rescue/...`. Dart client paths must include `/api/v2` |
 | Where it's copied | `backend/app/modules/crop_rescue/` | Relative imports only (already true) |
-| Import time | Host imports the package inside its `mount_components()` after a flag check (`ENABLE_CROP_RESCUE`) | Settings validation errors only disable Crop Rescue, never crash the host |
+| Import time | Host imports the package inside `crop_rescue_host.mount(app)`, only when `ENABLE_CROP_RESCUE=true` | Settings validation errors only disable Crop Rescue, never crash the host |
 | `.env` | Host runs from `backend/`; its settings don't export `.env` into `os.environ`, but it calls `load_dotenv()` first | `env_file=".env"` here still works when run from `backend/` |
 | `POST /rescue/check` | Host limits it to ADMIN/MANAGER (it runs the check for every farmer) | Keep it as is |
 | Flutter | One Dio: `ApiClient().dio` (adds the token, refreshes on 401) | `CropRescueApi(ApiClient().dio)`; methods take **no** `farmerId` (e.g. `fetchAlerts()`) |
+| Dependencies | Production (FastAPI Cloud) installs from the host's `backend/pyproject.toml`; the host adds this module's runtime lines there **and** in its `requirements.txt` | Keep runtime deps few, with version ranges |
 | Migrations | Host keeps component SQL in `backend/migrations/` as `010_cr_crop_rescue.sql`, `011_cr_demo_seed.sql`; a person runs them in Supabase | Keep `migrations/*.sql` idempotent and add-only (already tested) |
 
-Host wiring, for reference (lives in farmnex_main `backend/app/modules/wiring.py`, not here):
+Host wiring, for reference (lives in farmnex_main `backend/app/modules/crop_rescue_host.py`, which the
+host's `wiring.py` loads when `ENABLE_CROP_RESCUE=true` — not here):
 
 ```python
 from app.modules import crop_rescue                       # imported inside mount_components()
