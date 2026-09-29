@@ -27,13 +27,14 @@ Build one phase per `/build-phase <n>` and stop after each one. Rough times assu
 - [x] ownership test (other farmer → 404), nested-placement test (`app/modules/crop_rescue`), scheduler-safety test, simulate-switch test
 
 ## Phase 5: Flutter client and integration docs (≈1 h) · skills: drop-in-contract · SPEC: API contract, INTEGRATION.md
-- [ ] `integration/flutter/crop_rescue_api.dart` (takes the app's existing Dio, no `farmerId` params)
-- [ ] `INTEGRATION.md` (5 steps including the `dependency_overrides` line, plus curl smoke tests)
-- [ ] `/integration-check` all ✅
+- [x] `integration/flutter/crop_rescue_api.dart` (takes the app's existing Dio, no `farmerId` params)
+- [x] `INTEGRATION.md` (5 steps including the `dependency_overrides` line, plus curl smoke tests)
+- [x] `/integration-check` all ✅
+- [x] Follows `docs/FARMNEX_HOST.md`: farmer id = `public_id` (FARMER role only), own `CR_DATABASE_URL`, host's async engine refused, `/api/v2` prefix in the Dart client, curl and simulated-host test
 
 ## Phase 6: Judge polish (≈1 h) · SPEC: Crop data, Algorithm, Demo script
-- [ ] README.md: the problem in 2 lines, the algorithm in under a page, the source citation, an assumptions table, the demo script
-- [ ] `/demo` all PASS; transcript saved to `docs/demo_transcript.md`
-- [ ] judge-reviewer: no MUST-FIX left
+- [x] README.md: the problem in 2 lines, the algorithm in under a page, the source citation, an assumptions table, the demo script
+- [x] `/demo` all PASS; transcript saved to `docs/demo_transcript.md`
+- [x] judge-reviewer: no MUST-FIX left
 
 **Total ≈ 7–8 h.** Then mount it in the main backend (≈30 min) and wire up the Flutter screens (≈1–2 h).

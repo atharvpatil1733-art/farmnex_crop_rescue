@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS cr_lots (
     lng                 DOUBLE PRECISION NOT NULL,
     storage_mode        TEXT NOT NULL DEFAULT 'ambient',   -- ambient | cold
     floor_price_per_kg  NUMERIC NOT NULL DEFAULT 0,
-    freshness_used      DOUBLE PRECISION NOT NULL DEFAULT 0,
+    temperature_c       DOUBLE PRECISION,                  -- given at registration; NULL = resolve at each check
+    freshness_used     DOUBLE PRECISION NOT NULL DEFAULT 0,
     remaining_hours     DOUBLE PRECISION,
     spoil_eta           TIMESTAMPTZ,
     status              TEXT NOT NULL DEFAULT 'FRESH',     -- FRESH | AT_RISK | SPOILED | SOLD

@@ -35,7 +35,7 @@ These are already in `crop_rescue/data/crops.json`.
 life_hours(T) = ref_life_hours / Q10 ** ((T - ref_temp_c) / 10)
 ```
 
-- `Q10` defaults to `CR_Q10 = 2.0`. **This is a modelling assumption, not measured data.** Label it that way in the README and in `/rescue/crops`. The common rule of thumb for produce is 2–3; we pick the conservative end.
+- `Q10` defaults to `CR_Q10 = 2.0`. **This is a modelling assumption, not measured data.** Label it that way in the README and in `/rescue/crops`. The common rule of thumb for produce is 2–3; we pick the lower end, which is the optimistic one (a higher Q10 alerts earlier).
 - If `T <= ref_temp_c` (cold storage), use `ref_life_hours`. Never extend life beyond the handbook value.
 
 ### 2. Freshness accumulation: runs on every check
@@ -73,7 +73,7 @@ When a lot is registered and its total life at the current temperature is alread
 ### 4. Temperature source
 
 In priority order:
-1. `temperature_c` passed in the request (check or simulate)
+1. `temperature_c` passed in the request (simulate, or the check call). The temperature given when the lot was registered is stored on the lot (`cr_lots.temperature_c`) and reused by every later check, so scheduled checks do not fall back to the default.
 2. Open-Meteo current temperature for the lot's lat/lng, **only if `CR_USE_OPEN_METEO=true`**. Use a 3-second timeout and fall back on any error.
 3. `CR_DEFAULT_TEMP_C` (default `30.0`, a stated assumption for a Pune-area afternoon)
 

@@ -13,7 +13,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CR_", env_file=".env", extra="ignore")
 
-    # Main database (the team's Supabase). Falls back to the host's DATABASE_URL.
+    # Main database (the team's Supabase). Set CR_DATABASE_URL (sync psycopg URL); the
+    # DATABASE_URL fallback is for simple hosts and is refused if it uses an async driver.
     # This fallback is for the production engine only; tests never read this
     # field, only test_database_url below.
     database_url: SecretStr | None = Field(

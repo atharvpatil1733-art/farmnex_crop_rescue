@@ -48,6 +48,7 @@ ALLOWED_ALTER_ACTIONS = [
 
 
 def _sql_files() -> list[Path]:
+    """Return sorted SQL migration paths, or an empty list if the directory is absent."""
     if not MIGRATIONS_DIR.is_dir():
         return []
     return sorted(MIGRATIONS_DIR.glob("*.sql"))
@@ -60,14 +61,17 @@ def _strip_comments(sql: str) -> str:
 
 @pytest.fixture(params=_sql_files(), ids=lambda p: p.name)
 def sql_file(request) -> Path:
+    """Provide each migration path as a separately named test case."""
     return request.param
 
 
 def test_at_least_one_migration_exists():
+    """Require SQL migrations so the safety checks cannot pass over an empty set."""
     assert _sql_files(), f"no .sql files found under {MIGRATIONS_DIR}"
 
 
 def test_no_forbidden_statement(sql_file: Path):
+    """Reject destructive or privileged SQL statements in every migration."""
     code = _strip_comments(sql_file.read_text(encoding="utf-8"))
     for pattern in FORBIDDEN_PATTERNS:
         match = re.search(pattern, code, re.IGNORECASE)
@@ -75,6 +79,7 @@ def test_no_forbidden_statement(sql_file: Path):
 
 
 def test_every_created_or_touched_object_is_cr_prefixed(sql_file: Path):
+    """Require the cr_ prefix for created objects, writes, and index target tables."""
     code = _strip_comments(sql_file.read_text(encoding="utf-8"))
 
     creates = re.findall(
@@ -103,6 +108,7 @@ def test_every_created_or_touched_object_is_cr_prefixed(sql_file: Path):
 
 
 def test_alter_table_only_enables_rls_or_adds_a_column_on_a_cr_table(sql_file: Path):
+    """Limit ALTER TABLE to enabling RLS or safely adding columns on cr_ tables."""
     code = _strip_comments(sql_file.read_text(encoding="utf-8"))
 
     for match in re.finditer(
@@ -117,12 +123,14 @@ def test_alter_table_only_enables_rls_or_adds_a_column_on_a_cr_table(sql_file: P
 
 
 def test_migration_is_wrapped_in_a_transaction(sql_file: Path):
+    """Require BEGIN and COMMIT markers in each migration."""
     code = _strip_comments(sql_file.read_text(encoding="utf-8")).upper()
     assert "BEGIN" in code, f"{sql_file.name}: must be wrapped in BEGIN ... COMMIT"
     assert "COMMIT" in code, f"{sql_file.name}: must be wrapped in BEGIN ... COMMIT"
 
 
 def test_demo_seed_only_inserts_and_is_conflict_safe():
+    """Check that demo seeding inserts buyers, ignores conflicts, and never mutates rows."""
     seed = MIGRATIONS_DIR / "002_demo_seed.sql"
     if not seed.exists():
         pytest.skip("002_demo_seed.sql not present yet")

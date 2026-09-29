@@ -38,6 +38,7 @@ RUN_NESTED_SCRIPT = textwrap.dedent(
 
 
 def test_nested_placement_with_relative_imports_only(tmp_path):
+    """Verify crop catalog access after copying the package into a nested host module."""
     dest_pkg = tmp_path / "app" / "modules" / "crop_rescue"
     shutil.copytree(REPO_ROOT / "crop_rescue", dest_pkg)
     (tmp_path / "app" / "__init__.py").write_text("")

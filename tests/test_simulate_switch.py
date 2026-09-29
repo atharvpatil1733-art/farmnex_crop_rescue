@@ -12,6 +12,7 @@ from crop_rescue import current_farmer_id, router, settings
 
 
 def _client() -> TestClient:
+    """Mount the router in a client with a fixed synthetic farmer identity."""
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[current_farmer_id] = lambda: "farmer-switch"
@@ -19,6 +20,7 @@ def _client() -> TestClient:
 
 
 def test_simulate_returns_404_when_disabled(monkeypatch):
+    """Verify that the disabled simulation endpoint returns 404 before database access."""
     monkeypatch.setattr(settings, "enable_simulate", False)
     client = _client()
 
@@ -28,6 +30,7 @@ def test_simulate_returns_404_when_disabled(monkeypatch):
 
 
 def test_simulate_switch_does_not_affect_other_endpoints(monkeypatch):
+    """Verify that disabling simulation leaves the crop catalog available."""
     monkeypatch.setattr(settings, "enable_simulate", False)
     client = _client()
 

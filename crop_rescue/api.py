@@ -36,6 +36,7 @@ router = APIRouter(prefix="/rescue", tags=["crop-rescue"])
     description="Whether the router is mounted, how many crops are loaded, and whether the database is reachable.",
 )
 def health() -> HealthOut:
+    """Report router readiness, crop count, and database connectivity."""
     try:
         engine = db.get_engine()
     except RuntimeError:
@@ -50,6 +51,7 @@ def health() -> HealthOut:
     description="Each crop's shelf life at 25/30/35 °C under the Q10 model, with its source and the Q10 assumption.",
 )
 def list_crops() -> CropsOut:
+    """Return the sourced crop catalog with the configured Q10 assumption."""
     return CropsOut(q10=settings.q10, crops=service.list_crops())
 
 
@@ -61,6 +63,7 @@ def list_crops() -> CropsOut:
     description="Registers a lot for the current farmer and runs its first freshness check immediately.",
 )
 def create_lot(body: LotCreate, farmer_id: str = Depends(current_farmer_id)) -> LotOut:
+    """Register the current farmer's lot and return its first freshness result."""
     lot = service.create_lot(
         db.get_engine(),
         farmer_id,
@@ -84,6 +87,7 @@ def create_lot(body: LotCreate, farmer_id: str = Depends(current_farmer_id)) -> 
     description="The current farmer's lots, with status, remaining_hours and spoil_eta kept fresh on read.",
 )
 def list_lots(farmer_id: str = Depends(current_farmer_id)) -> list[LotOut]:
+    """Return the current farmer's lots after checking for overdue freshness updates."""
     lots = service.list_lots(db.get_engine(), farmer_id)
     return [LotOut.model_validate(lot) for lot in lots]
 
@@ -95,6 +99,7 @@ def list_lots(farmer_id: str = Depends(current_farmer_id)) -> list[LotOut]:
     description="One of the current farmer's lots plus every check ever run on it. 404 if it isn't theirs.",
 )
 def get_lot(lot_id: str, farmer_id: str = Depends(current_farmer_id)) -> LotDetailOut:
+    """Return an owned lot and its check history, or raise HTTP 404."""
     lot, checks = service.get_lot_detail(db.get_engine(), farmer_id, lot_id)
     lot_out = LotOut.model_validate(lot)
     return LotDetailOut(**lot_out.model_dump(), checks=checks)
@@ -107,6 +112,7 @@ def get_lot(lot_id: str, farmer_id: str = Depends(current_farmer_id)) -> LotDeta
     description="The top CR_TOP_N buyers for this lot. 404 if it isn't yours, 409 if it isn't AT_RISK.",
 )
 def get_matches(lot_id: str, farmer_id: str = Depends(current_farmer_id)) -> list[MatchOut]:
+    """Return ranked buyers for an owned AT_RISK lot; otherwise raise 404 or 409."""
     matches = service.get_matches(db.get_engine(), farmer_id, lot_id)
     return [MatchOut.model_validate(m) for m in matches]
 
@@ -118,6 +124,7 @@ def get_matches(lot_id: str, farmer_id: str = Depends(current_farmer_id)) -> lis
     description="Marks the lot SOLD, so it stops being checked and alerted on. 404 if it isn't yours.",
 )
 def mark_sold(lot_id: str, farmer_id: str = Depends(current_farmer_id)) -> LotOut:
+    """Mark an owned lot SOLD, or raise HTTP 404 if it is unavailable."""
     lot = service.mark_sold(db.get_engine(), farmer_id, lot_id)
     return LotOut.model_validate(lot)
 
@@ -129,6 +136,7 @@ def mark_sold(lot_id: str, farmer_id: str = Depends(current_farmer_id)) -> LotOu
     description="Runs the same job the scheduler runs, over every open lot for every farmer. Needs no farmer.",
 )
 def run_check() -> CheckRunOut:
+    """Check open lots across all farmers and return the resulting status counts."""
     result = service.run_check(db.get_engine(), now=datetime.now(timezone.utc))
     return CheckRunOut(**result)
 
@@ -143,6 +151,7 @@ def run_check() -> CheckRunOut:
     ),
 )
 def simulate(body: SimulateRequest, farmer_id: str = Depends(current_farmer_id)) -> SimulateOut:
+    """Age the current farmer's lots by the requested hours, or return 404 if disabled."""
     if not settings.enable_simulate:
         raise HTTPException(404, "Simulate is disabled (CR_ENABLE_SIMULATE=false)")
     lots = service.simulate(
@@ -165,6 +174,7 @@ def simulate(body: SimulateRequest, farmer_id: str = Depends(current_farmer_id))
 def list_alerts(
     unread_only: bool = Query(False), farmer_id: str = Depends(current_farmer_id)
 ) -> list[AlertOut]:
+    """Return the current farmer's alerts, optionally restricted to unread alerts."""
     alerts = service.list_alerts(db.get_engine(), farmer_id, unread_only)
     return [AlertOut.model_validate(a) for a in alerts]
 
@@ -176,5 +186,6 @@ def list_alerts(
     description="Marks one of the current farmer's alerts read. 404 if it isn't theirs.",
 )
 def mark_alert_read(alert_id: str, farmer_id: str = Depends(current_farmer_id)) -> AlertOut:
+    """Mark an owned alert read, or raise HTTP 404 if it is unavailable."""
     alert = service.mark_alert_read(db.get_engine(), farmer_id, alert_id)
     return AlertOut.model_validate(alert)

@@ -26,6 +26,7 @@ def _harvested_now() -> str:
 
 @pytest.fixture
 def app(db):
+    """Mount the router in a fresh FastAPI app using the isolated test database."""
     crop_rescue.configure(engine=db)
     fastapi_app = FastAPI()
     fastapi_app.include_router(router)
@@ -33,11 +34,13 @@ def app(db):
 
 
 def _client_as(app: FastAPI, farmer_id: str) -> TestClient:
+    """Override the app's farmer dependency and return a client for that identity."""
     app.dependency_overrides[current_farmer_id] = lambda: farmer_id
     return TestClient(app)
 
 
 def _create_lot(app: FastAPI, farmer_id: str) -> dict:
+    """Create a freshly harvested tomato lot belonging to the requested farmer."""
     client = _client_as(app, farmer_id)
     response = client.post(
         "/rescue/lots",
@@ -55,6 +58,7 @@ def _create_lot(app: FastAPI, farmer_id: str) -> dict:
 
 
 def test_get_lot_by_another_farmer_is_404(app):
+    """Verify that a lot lookup conceals another farmer's lot with HTTP 404."""
     owner = f"farmer-{uuid.uuid4()}"
     other = f"farmer-{uuid.uuid4()}"
     lot = _create_lot(app, owner)
@@ -65,6 +69,7 @@ def test_get_lot_by_another_farmer_is_404(app):
 
 
 def test_matches_for_another_farmers_lot_is_404(app):
+    """Verify that buyer matching conceals another farmer's lot with HTTP 404."""
     owner = f"farmer-{uuid.uuid4()}"
     other = f"farmer-{uuid.uuid4()}"
     lot = _create_lot(app, owner)
@@ -75,6 +80,7 @@ def test_matches_for_another_farmers_lot_is_404(app):
 
 
 def test_mark_sold_for_another_farmers_lot_is_404(app):
+    """Verify that another farmer cannot mark an owned lot sold or alter its status."""
     owner = f"farmer-{uuid.uuid4()}"
     other = f"farmer-{uuid.uuid4()}"
     lot = _create_lot(app, owner)
@@ -88,6 +94,7 @@ def test_mark_sold_for_another_farmers_lot_is_404(app):
 
 
 def test_mark_alert_read_for_another_farmers_alert_is_404(app):
+    """Verify that marking another farmer's alert read returns HTTP 404."""
     owner = f"farmer-{uuid.uuid4()}"
     other = f"farmer-{uuid.uuid4()}"
     lot = _create_lot(app, owner)
@@ -100,6 +107,7 @@ def test_mark_alert_read_for_another_farmers_alert_is_404(app):
 
 
 def test_listing_shows_only_the_current_farmers_lots(app):
+    """Verify that lot listings exclude lots belonging to another farmer."""
     farmer_a = f"farmer-{uuid.uuid4()}"
     farmer_b = f"farmer-{uuid.uuid4()}"
     _create_lot(app, farmer_a)
@@ -129,6 +137,7 @@ def test_farmer_id_in_the_post_body_is_ignored():
 
 
 def test_unknown_lot_id_is_404_not_500(app):
+    """Verify that a nonexistent lot UUID returns HTTP 404."""
     owner = f"farmer-{uuid.uuid4()}"
     response = _client_as(app, owner).get(f"/rescue/lots/{uuid.uuid4()}")
     assert response.status_code == 404

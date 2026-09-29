@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 
 def _round1(value: float | None) -> float | None:
+    """Round a value to one decimal place, preserving None for unknown values."""
     return None if value is None else round(value, 1)
 
 
@@ -38,7 +39,7 @@ class CropsOut(BaseModel):
     q10: float
     q10_note: str = (
         "Q10 = 2 (assumption). The rule of thumb for produce is 2-3; "
-        "we use the conservative end, which favours alerting early."
+        "we use the lower end (a higher Q10 would alert earlier)."
     )
     crops: list[CropOut]
 
@@ -87,6 +88,7 @@ class CheckOut(BaseModel):
 
     @field_serializer("elapsed_hours", "remaining_hours")
     def _round_hours(self, value: float) -> float:
+        """Serialize elapsed and remaining hours to one decimal place."""
         return round(value, 1)
 
 
@@ -101,6 +103,7 @@ class LotOut(BaseModel):
     lng: float
     storage_mode: str
     floor_price_per_kg: float
+    temperature_c: float | None
     freshness_used: float
     remaining_hours: float | None
     spoil_eta: datetime | None
@@ -110,6 +113,7 @@ class LotOut(BaseModel):
 
     @field_serializer("remaining_hours")
     def _round_remaining(self, value: float | None) -> float | None:
+        """Serialize remaining hours to one decimal place, preserving None."""
         return _round1(value)
 
 
@@ -133,6 +137,7 @@ class MatchOut(BaseModel):
 
     @field_serializer("travel_hours")
     def _round_travel_hours(self, value: float) -> float:
+        """Serialize estimated travel hours to one decimal place."""
         return round(value, 1)
 
 

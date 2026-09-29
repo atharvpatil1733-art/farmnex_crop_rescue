@@ -17,6 +17,7 @@ Q10 = 2.0
 
 
 def test_status_thresholds():
+    """Verify FRESH, AT_RISK, and SPOILED boundaries for the default alert window."""
     assert status_for(61, ALERT_H, INTERVAL_H) == Status.FRESH
     assert status_for(60, ALERT_H, INTERVAL_H) == Status.AT_RISK
     assert status_for(0.1, ALERT_H, INTERVAL_H) == Status.AT_RISK
@@ -24,6 +25,7 @@ def test_status_thresholds():
 
 
 def test_alert_fires_once():
+    """Verify alerts on entry to AT_RISK while suppressing repeats and SOLD transitions."""
     assert should_alert(Status.FRESH, Status.AT_RISK) is True
     assert should_alert(None, Status.AT_RISK) is True  # registered already at risk
     assert should_alert(Status.AT_RISK, Status.AT_RISK) is False  # no duplicate
