@@ -111,6 +111,7 @@ class LotOut {
   final double lng;
   final String storageMode;
   final double floorPricePerKg;
+  final double? temperatureC;
   final double freshnessUsed;
   final double? remainingHours;
   final DateTime? spoilEta;
@@ -127,6 +128,7 @@ class LotOut {
     required this.lng,
     required this.storageMode,
     required this.floorPricePerKg,
+    required this.temperatureC,
     required this.freshnessUsed,
     required this.remainingHours,
     required this.spoilEta,
@@ -144,6 +146,7 @@ class LotOut {
         lng: _d(json['lng']),
         storageMode: json['storage_mode'] as String,
         floorPricePerKg: _d(json['floor_price_per_kg']),
+        temperatureC: _dOrNull(json['temperature_c']),
         freshnessUsed: _d(json['freshness_used']),
         remainingHours: _dOrNull(json['remaining_hours']),
         spoilEta: _tOrNull(json['spoil_eta']),
@@ -166,6 +169,7 @@ class LotDetailOut extends LotOut {
     required super.lng,
     required super.storageMode,
     required super.floorPricePerKg,
+    required super.temperatureC,
     required super.freshnessUsed,
     required super.remainingHours,
     required super.spoilEta,
@@ -186,6 +190,7 @@ class LotDetailOut extends LotOut {
       lng: lot.lng,
       storageMode: lot.storageMode,
       floorPricePerKg: lot.floorPricePerKg,
+      temperatureC: lot.temperatureC,
       freshnessUsed: lot.freshnessUsed,
       remainingHours: lot.remainingHours,
       spoilEta: lot.spoilEta,

@@ -73,7 +73,7 @@ When a lot is registered and its total life at the current temperature is alread
 ### 4. Temperature source
 
 In priority order:
-1. `temperature_c` passed in the request (check or simulate)
+1. `temperature_c` passed in the request (simulate, or the check call). The temperature given when the lot was registered is stored on the lot (`cr_lots.temperature_c`) and reused by every later check, so scheduled checks do not fall back to the default.
 2. Open-Meteo current temperature for the lot's lat/lng, **only if `CR_USE_OPEN_METEO=true`**. Use a 3-second timeout and fall back on any error.
 3. `CR_DEFAULT_TEMP_C` (default `30.0`, a stated assumption for a Pune-area afternoon)
 

@@ -51,6 +51,7 @@ cr_lots = sa.Table(
     sa.Column("lng", sa.Float, nullable=False),
     sa.Column("storage_mode", sa.Text, nullable=False, server_default="ambient"),
     sa.Column("floor_price_per_kg", sa.Numeric(asdecimal=False), nullable=False, server_default="0"),
+    sa.Column("temperature_c", sa.Float),
     sa.Column("freshness_used", sa.Float, nullable=False, server_default="0"),
     sa.Column("remaining_hours", sa.Float),
     sa.Column("spoil_eta", sa.DateTime(timezone=True)),
@@ -114,6 +115,7 @@ class LotRecord:
     lng: float
     storage_mode: str
     floor_price_per_kg: float
+    temperature_c: float | None
     freshness_used: float
     remaining_hours: float | None
     spoil_eta: datetime | None
@@ -174,6 +176,7 @@ def _lot_from_row(row: sa.Row) -> LotRecord:
         lng=m["lng"],
         storage_mode=m["storage_mode"],
         floor_price_per_kg=float(m["floor_price_per_kg"]),
+        temperature_c=m["temperature_c"],
         freshness_used=m["freshness_used"],
         remaining_hours=m["remaining_hours"],
         spoil_eta=m["spoil_eta"],
@@ -242,6 +245,7 @@ def insert_lot(
     lng: float,
     storage_mode: str,
     floor_price_per_kg: float,
+    temperature_c: float | None,
     freshness_used: float,
     remaining_hours: float,
     spoil_eta: datetime | None,
@@ -260,6 +264,7 @@ def insert_lot(
             lng=lng,
             storage_mode=storage_mode,
             floor_price_per_kg=floor_price_per_kg,
+            temperature_c=temperature_c,
             freshness_used=freshness_used,
             remaining_hours=remaining_hours,
             spoil_eta=spoil_eta,

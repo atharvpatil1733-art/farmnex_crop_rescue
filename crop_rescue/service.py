@@ -244,6 +244,7 @@ def create_lot(
             lng=lng,
             storage_mode=storage_mode,
             floor_price_per_kg=floor_price_per_kg,
+            temperature_c=temperature_c,
             freshness_used=freshness_used,
             remaining_hours=remaining,
             spoil_eta=spoil_eta,
@@ -328,8 +329,10 @@ def _apply_check(
     crop = shelf_life.load_crops()[lot.crop_code]
     prev_status = Status(lot.status)
 
+    # Explicit call temperature (simulate) wins; otherwise reuse the one given at registration.
+    use_temp = temperature_c if temperature_c is not None else lot.temperature_c
     temp_c, temp_source, freshness_used, remaining, new_status = _compute_check(
-        crop, lot.storage_mode, lot.lat, lot.lng, temperature_c, lot.freshness_used, elapsed_hours
+        crop, lot.storage_mode, lot.lat, lot.lng, use_temp, lot.freshness_used, elapsed_hours
     )
     spoil_eta = checked_at + timedelta(hours=remaining)
 

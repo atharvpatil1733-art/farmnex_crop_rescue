@@ -103,6 +103,7 @@ class LotOut(BaseModel):
     lng: float
     storage_mode: str
     floor_price_per_kg: float
+    temperature_c: float | None
     freshness_used: float
     remaining_hours: float | None
     spoil_eta: datetime | None

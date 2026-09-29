@@ -40,7 +40,9 @@ Do not copy `dev_app.py`, `tests/` or `docs/`. They are for running this repo on
 2. Paste the whole of `migrations/001_crop_rescue.sql` and click **Run**.
 3. Optional, demo only: do the same with `migrations/002_demo_seed.sql`. It adds 10 fictional buyers ("Demo Buyer 1", ...) around Pune and Nashik so the buyer suggestions have something to show. Skip it once step 5 is done.
 
-Both files only **add** `cr_` tables, indexes and a view, and are safe to run twice. **Do not re-run `001` after step 5**: it would put the demo `cr_buyer_pool` view back over your real-buyers one. To confirm, open **Table Editor**: you should see `cr_lots`, `cr_checks`, `cr_alerts` and `cr_demo_buyers`.
+4. **Already ran an earlier `001`?** Also run `migrations/003_lot_temperature.sql`. It adds one nullable `temperature_c` column to `cr_lots` (a fresh `001` already has it), and is safe to run twice.
+
+All these files only **add** `cr_` tables, indexes and a view, and are safe to run twice. **Do not re-run `001` after step 5**: it would put the demo `cr_buyer_pool` view back over your real-buyers one. To confirm, open **Table Editor**: you should see `cr_lots`, `cr_checks`, `cr_alerts` and `cr_demo_buyers`.
 
 Nothing else creates these tables. If you skip this step, the module still starts and `/rescue/health` can still say `"db": true` (it only tests the connection), but registering a lot fails with a database error until the tables exist.
 

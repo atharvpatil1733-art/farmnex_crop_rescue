@@ -64,6 +64,7 @@ The handbook does not say how shelf life changes with temperature, and we do not
 - **Onion and potato** are left out on purpose: cured, they keep for months and are not a rescue case.
 - **Very perishable lots:** a lot registered with under 60 hours of life left (for example spinach on a hot day, demo step 3) is alerted at once with whatever time remains. It cannot be given 48 hours it does not have.
 - **The 48-hour promise assumes a roughly steady temperature** between checks. A sudden heat wave inside a 12-hour window can use freshness faster than the check assumes. The next check catches it.
+- The temperature given at registration is kept and reused for every later check of that lot. A lot registered without one uses the live or default temperature at each check. It is not re-measured after registration.
 - One temperature per check, for the whole lot. No humidity, ripeness or handling damage.
 - Buyer prices are fixed offers. There is no live market feed and no partial sale across several buyers.
 
@@ -101,7 +102,7 @@ After the demo, set `CR_ENABLE_SIMULATE=false` so the fast-forward endpoint retu
 
 ```
 crop_rescue/    the module that goes into the main backend
-migrations/     001_crop_rescue.sql, 002_demo_seed.sql   (run by hand in the Supabase SQL editor)
+migrations/     001_crop_rescue.sql, 002_demo_seed.sql, 003_lot_temperature.sql   (run by hand in the Supabase SQL editor)
 integration/    flutter/crop_rescue_api.dart
 tests/          pytest suite     dev_app.py   local runner (never deployed)
 docs/           SPEC.md, BUILD_PLAN.md, demo_transcript.md
