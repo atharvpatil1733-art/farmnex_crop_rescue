@@ -27,9 +27,9 @@ Build one phase per `/build-phase <n>` and stop after each one. Rough times assu
 - [x] ownership test (other farmer → 404), nested-placement test (`app/modules/crop_rescue`), scheduler-safety test, simulate-switch test
 
 ## Phase 5: Flutter client and integration docs (≈1 h) · skills: drop-in-contract · SPEC: API contract, INTEGRATION.md
-- [ ] `integration/flutter/crop_rescue_api.dart` (takes the app's existing Dio, no `farmerId` params)
-- [ ] `INTEGRATION.md` (5 steps including the `dependency_overrides` line, plus curl smoke tests)
-- [ ] `/integration-check` all ✅
+- [x] `integration/flutter/crop_rescue_api.dart` (takes the app's existing Dio, no `farmerId` params)
+- [x] `INTEGRATION.md` (5 steps including the `dependency_overrides` line, plus curl smoke tests)
+- [x] `/integration-check` all ✅
 
 ## Phase 6: Judge polish (≈1 h) · SPEC: Crop data, Algorithm, Demo script
 - [ ] README.md: the problem in 2 lines, the algorithm in under a page, the source citation, an assumptions table, the demo script
