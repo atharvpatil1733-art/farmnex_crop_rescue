@@ -32,6 +32,7 @@ def _insert_lot(db, farmer_id: str, **overrides) -> repo.LotRecord:
         lng=73.8567,
         storage_mode="ambient",
         floor_price_per_kg=10.0,
+        temperature_c=22.5,
         freshness_used=0.0,
         remaining_hours=68.2,
         spoil_eta=NOW + timedelta(hours=68.2),
@@ -53,6 +54,7 @@ def test_insert_and_get_lot_round_trip(db):
     assert fetched.id == created.id
     assert fetched.crop_code == "tomato"
     assert fetched.quantity_kg == pytest.approx(500.0)
+    assert fetched.temperature_c == pytest.approx(22.5)
     assert fetched.status == "FRESH"
 
 
