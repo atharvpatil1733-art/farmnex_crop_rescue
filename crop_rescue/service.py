@@ -368,8 +368,12 @@ def run_check(engine: Engine, *, now: datetime) -> dict:
     """
     checked = at_risk = spoiled = 0
     for lot in repo.list_active_lots(engine):
-        elapsed = shelf_life.elapsed_hours_since_last_check(lot.harvested_at, lot.last_checked_at, now)
-        updated = _apply_check(engine, lot, elapsed_hours=elapsed, temperature_c=None, checked_at=now)
+        try:
+            elapsed = shelf_life.elapsed_hours_since_last_check(lot.harvested_at, lot.last_checked_at, now)
+            updated = _apply_check(engine, lot, elapsed_hours=elapsed, temperature_c=None, checked_at=now)
+        except Exception:
+            logger.exception("check failed for lot %s; continuing with the next lot", lot.id)
+            continue
         checked += 1
         if updated.status == Status.AT_RISK.value:
             at_risk += 1

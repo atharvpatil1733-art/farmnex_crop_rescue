@@ -54,3 +54,23 @@ def test_stop_scheduler_is_safe_when_never_started():
     """Verify that stopping an absent scheduler is harmless."""
     scheduler.stop_scheduler()  # must not raise
     assert scheduler._scheduler is None
+
+
+def test_one_failing_lot_does_not_stop_the_rest(monkeypatch):
+    """A lot that raises is logged and skipped; later lots are still checked."""
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    from crop_rescue import service
+
+    now = datetime.now(timezone.utc)
+    lots = [SimpleNamespace(id=n, harvested_at=now, last_checked_at=now) for n in ("bad", "good")]
+    monkeypatch.setattr(service.repo, "list_active_lots", lambda engine: lots)
+
+    def fake_apply(engine, lot, **kwargs):
+        if lot.id == "bad":
+            raise RuntimeError("boom")
+        return SimpleNamespace(status="AT_RISK")
+
+    monkeypatch.setattr(service, "_apply_check", fake_apply)
+    assert service.run_check(None, now=now) == {"checked": 1, "at_risk": 1, "spoiled": 0}

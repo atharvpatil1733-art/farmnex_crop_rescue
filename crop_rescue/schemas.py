@@ -39,7 +39,7 @@ class CropsOut(BaseModel):
     q10: float
     q10_note: str = (
         "Q10 = 2 (assumption). The rule of thumb for produce is 2-3; "
-        "we use the conservative end, which favours alerting early."
+        "we use the lower end (a higher Q10 would alert earlier)."
     )
     crops: list[CropOut]
 

@@ -20,7 +20,7 @@ It is a small FastAPI **router module** (`crop_rescue/`). It is copied into the 
 - too slow (the trip plus loading would take longer than the lot has left),
 - below the farmer's minimum price after paying for transport.
 
-Those left are scored, after each measure is scaled to 0-1 across the candidates: **50% net price** (price minus transport cost per kg), **20% spare time**, **20% buyer reliability**, **10% how much of the lot they can take**. The top 3 are shown with a reason such as *"₹18.4/kg after transport · 12 km (straight line) · 30 h to spare"*.
+Those left are scored, after each measure is scaled to 0-1 across the candidates: **50% net price** (price minus transport cost per kg), **20% spare time**, **20% buyer reliability**, **10% how much of the lot they can take**. The top 3 are shown with a reason such as *"₹18.4/kg after transport · 12 km · 30 h to spare"*.
 
 Everything is rule-based and can be explained on one page. There is no machine learning, so every number can be traced.
 
