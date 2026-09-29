@@ -13,6 +13,7 @@ It's a prototype for SIH judges: **simple, readable, explainable.** Every number
 
 - **`docs/SPEC.md`**: the full detail (algorithm, DB schema, ownership, API, config, scheduler, tests, demo, INTEGRATION.md content). **Read only the sections your phase needs.**
 - **`docs/BUILD_PLAN.md`**: build **one phase at a time**, then stop for review.
+- **`docs/FARMNEX_HOST.md`**: facts about the real FarmNex backend (user id, async DB, `/api/v2` prefix, Flutter Dio). Read it before Phase 5 or anything in `integration/` / `INTEGRATION.md`; it wins over SPEC.md about the host.
 - **Skills:** `shelf-life-engine` (before touching `core/`) and `drop-in-contract` (before touching anything else in `crop_rescue/`, `migrations/`, `integration/` or `INTEGRATION.md`).
 - **Commands:** `/build-phase <n>`, `/run-tests`, `/demo`, `/integration-check`. **Agent:** `judge-reviewer`, run it before calling a phase done.
 

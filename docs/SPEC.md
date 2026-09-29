@@ -166,8 +166,10 @@ def current_farmer_id(farmer_id: str | None = Query(None, description="Dev/demo 
 Every farmer-facing endpoint gets the farmer from `Depends(current_farmer_id)`, **never from the request body**. In the main backend, one line replaces it with the real login:
 
 ```python
-app.dependency_overrides[crop_rescue.current_farmer_id] = lambda user=Depends(get_current_user): str(user.id)
+app.dependency_overrides[crop_rescue.current_farmer_id] = lambda user=Depends(get_current_user): str(user.public_id)
 ```
+
+(FarmNex uses `user.public_id`, the UUID, and also checks the FARMER role — see `docs/FARMNEX_HOST.md`.)
 
 After that the `?farmer_id=` query parameter is ignored, and the farmer is always the logged-in user.
 
@@ -177,7 +179,7 @@ After that the `?farmer_id=` query parameter is ignored, and the farmer is alway
 
 ## API contract — `APIRouter(prefix="/rescue", tags=["crop-rescue"])`
 
-Once mounted, these live at `https://<main-backend-url>/rescue/...` and show up in the main backend's existing `/docs` under a **crop-rescue** section.
+Once mounted, these live at `https://<main-backend-url>/api/v2/rescue/...` (FarmNex mounts with `prefix="/api/v2"`) and show up in the main backend's existing `/docs` under a **crop-rescue** section.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -267,7 +269,8 @@ A 15-line FastAPI app that does `include_router(router)` plus the scheduler life
    from app.modules import crop_rescue   # adjust to where you placed it
    from app.modules.crop_rescue import router as rescue_router, start_scheduler, stop_scheduler
 
-   crop_rescue.configure(engine=engine)   # reuse the backend's existing SQLAlchemy engine (optional)
+   # FarmNex: do NOT pass the host engine (it is async). Set CR_DATABASE_URL instead.
+   # See docs/FARMNEX_HOST.md for the exact FarmNex wiring.
 
    @asynccontextmanager
    async def lifespan(app):
@@ -276,11 +279,11 @@ A 15-line FastAPI app that does `include_router(router)` plus the scheduler life
        stop_scheduler()
 
    app = FastAPI(lifespan=lifespan)       # or add these two calls to the existing lifespan
-   app.include_router(rescue_router, dependencies=[Depends(get_current_user)])  # existing login check
-   # the farmer is always the logged-in user:
-   app.dependency_overrides[crop_rescue.current_farmer_id] = lambda user=Depends(get_current_user): str(user.id)
+   app.include_router(rescue_router, prefix="/api/v2", dependencies=[Depends(get_current_user)])  # existing login check
+   # the farmer is always the logged-in user (FarmNex: public_id, FARMER role only):
+   app.dependency_overrides[crop_rescue.current_farmer_id] = rescue_farmer_id
    ```
-4. **Flutter:** copy `integration/flutter/crop_rescue_api.dart` into the app. Create it with the app's existing Dio, `CropRescueApi(dio)`, so the base URL and login token carry over. Call `fetchAlerts(farmerId)` on the farmer home screen every 30 s.
+4. **Flutter:** copy `integration/flutter/crop_rescue_api.dart` into the app. Create it with the app's existing Dio, `CropRescueApi(dio)`, so the base URL and login token carry over. Call `fetchAlerts()` (no farmer id — the token says who it is) on the farmer home screen every 30 s, only while that screen is visible.
 5. **Real buyers (later):** redefine the `cr_buyer_pool` view as a `SELECT` over the main app's real buyer tables. No Python changes are needed.
 
 Also include a `curl` smoke test for each endpoint against the main backend URL, using whatever auth header the backend already uses. Add a note: set `CR_ENABLE_SIMULATE=false` once the demo is over. Add a troubleshooting note: settings are validated at import (fail-fast), so if the backend won't start after adding the module, check the `CR_*` env vars (e.g. `CR_Q10=abc` raises a `ValidationError` naming the bad variable).
