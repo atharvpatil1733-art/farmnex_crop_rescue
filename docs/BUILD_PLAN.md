@@ -30,6 +30,7 @@ Build one phase per `/build-phase <n>` and stop after each one. Rough times assu
 - [x] `integration/flutter/crop_rescue_api.dart` (takes the app's existing Dio, no `farmerId` params)
 - [x] `INTEGRATION.md` (5 steps including the `dependency_overrides` line, plus curl smoke tests)
 - [x] `/integration-check` all ✅
+- [x] Follows `docs/FARMNEX_HOST.md`: farmer id = `public_id` (FARMER role only), own `CR_DATABASE_URL`, host's async engine refused, `/api/v2` prefix in the Dart client, curl and simulated-host test
 
 ## Phase 6: Judge polish (≈1 h) · SPEC: Crop data, Algorithm, Demo script
 - [x] README.md: the problem in 2 lines, the algorithm in under a page, the source citation, an assumptions table, the demo script

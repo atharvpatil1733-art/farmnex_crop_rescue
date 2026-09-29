@@ -24,7 +24,7 @@ HOST_SCRIPT = textwrap.dedent(
     """
     import os, sys
     from datetime import datetime, timezone
-    import sqlalchemy as sa
+    from types import SimpleNamespace
     from fastapi import Depends, FastAPI, Header, HTTPException
     from fastapi.testclient import TestClient
 
@@ -32,13 +32,21 @@ HOST_SCRIPT = textwrap.dedent(
     from app.modules.crop_rescue import router
 
     WITH_DB = sys.argv[1] == "db"
-    if WITH_DB:
-        crop_rescue.configure(engine=sa.create_engine(os.environ["CR_TEST_DATABASE_URL"]))
+    P = "/api/v2/rescue"   # FarmNex mounts everything under /api/v2
 
-    def get_current_user(authorization: str | None = Header(None), x_user: str | None = Header(None)):
+    # FarmNex: the host does NOT call crop_rescue.configure(engine=...) (its engine is async).
+    # In db mode the module builds its own sync engine from CR_DATABASE_URL.
+
+    def get_current_user(authorization: str | None = Header(None), x_user: str | None = Header(None), x_role: str = Header("FARMER")):
         if authorization != "Bearer good" or not x_user:
             raise HTTPException(401, "not logged in")
-        return type("User", (), {"id": x_user})()
+        # id is the internal integer the app never shows; public_id is the UUID that identifies the farmer
+        return SimpleNamespace(id=424242, public_id=x_user, role=SimpleNamespace(name=x_role))
+
+    async def rescue_farmer_id(user=Depends(get_current_user)) -> str:
+        if user.role is None or user.role.name != "FARMER":
+            raise HTTPException(403, "Only farmers can use Crop Rescue.")
+        return str(user.public_id)
 
     app = FastAPI()
 
@@ -46,38 +54,42 @@ HOST_SCRIPT = textwrap.dedent(
     def host_root():
         return {"host": "still works"}
 
-    app.include_router(router, dependencies=[Depends(get_current_user)])
-    app.dependency_overrides[crop_rescue.current_farmer_id] = lambda user=Depends(get_current_user): str(user.id)
+    app.include_router(router, prefix="/api/v2", dependencies=[Depends(get_current_user)])
+    app.dependency_overrides[crop_rescue.current_farmer_id] = rescue_farmer_id
 
     client = TestClient(app)
-    def as_user(name):
-        return {"Authorization": "Bearer good", "X-User": name}
+    def as_user(name, role="FARMER"):
+        return {"Authorization": "Bearer good", "X-User": name, "X-Role": role}
 
-    # host route untouched, docs has the crop-rescue section
+    # host route untouched, docs has the crop-rescue section, and the unprefixed path is not mounted
     assert client.get("/").json() == {"host": "still works"}
     assert client.get("/docs").status_code == 200
     spec = client.get("/openapi.json").json()
     tags = {t for p in spec["paths"].values() for op in p.values() for t in op.get("tags", [])}
     assert "crop-rescue" in tags, tags
+    assert all(path.startswith("/api/v2/rescue") for path in spec["paths"] if "rescue" in path), list(spec["paths"])
+    assert client.get("/rescue/crops", headers=as_user("A")).status_code == 404
 
-    # host auth wraps the router
-    assert client.get("/rescue/health").status_code == 401
-    assert client.get("/rescue/crops", headers={"Authorization": "Bearer bad", "X-User": "A"}).status_code == 401
-    assert client.get("/rescue/crops", headers=as_user("A")).status_code == 200
+    # host auth wraps the router; only farmers get through
+    assert client.get(P + "/health").status_code == 401
+    assert client.get(P + "/crops", headers={"Authorization": "Bearer bad", "X-User": "A"}).status_code == 401
+    assert client.get(P + "/lots", headers=as_user("A", "ADMIN")).status_code == 403
+    assert client.get(P + "/crops", headers=as_user("A")).status_code == 200
 
     if WITH_DB:
-        assert client.get("/rescue/health", headers=as_user("A")).json() == {"ok": True, "crops": 8, "db": True}
+        assert client.get(P + "/health", headers=as_user("A")).json() == {"ok": True, "crops": 8, "db": True}
         body = {
             "crop_code": "tomato", "quantity_kg": 500, "lat": 18.5204, "lng": 73.8567,
             "harvested_at": datetime.now(timezone.utc).isoformat(), "temperature_c": 30,
         }
-        made = client.post("/rescue/lots", json=body, headers=as_user("host-farmer-A"))
+        made = client.post(P + "/lots", json=body, headers=as_user("uuid-farmer-A"))
         assert made.status_code == 201, made.text
         lot_id = made.json()["id"]
-        assert client.get(f"/rescue/lots/{lot_id}", headers=as_user("host-farmer-A")).status_code == 200
-        assert client.get(f"/rescue/lots/{lot_id}", headers=as_user("host-farmer-B")).status_code == 404
-        assert client.get(f"/rescue/lots/{lot_id}?farmer_id=host-farmer-A", headers=as_user("host-farmer-B")).status_code == 404
-        assert client.get("/rescue/lots", headers=as_user("host-farmer-B")).json() == []
+        assert client.get(f"{P}/lots/{lot_id}", headers=as_user("uuid-farmer-A")).status_code == 200
+        assert client.get(f"{P}/lots/{lot_id}", headers=as_user("uuid-farmer-B")).status_code == 404
+        assert client.get(f"{P}/lots/{lot_id}?farmer_id=uuid-farmer-A", headers=as_user("uuid-farmer-B")).status_code == 404
+        assert client.get(P + "/lots", headers=as_user("uuid-farmer-B")).json() == []
+        assert client.get(P + "/lots", headers=as_user("424242")).json() == []  # the internal integer id is not a farmer id
 
     print("SIMULATED_HOST_OK")
     """
@@ -97,6 +109,10 @@ def _run_host(tmp_path: Path, mode: str) -> subprocess.CompletedProcess:
 
     env = {k: v for k, v in os.environ.items() if k not in ("CR_DATABASE_URL", "DATABASE_URL")}
     env["CR_ENABLE_SCHEDULER"] = "false"
+    if mode == "db":
+        # Like FarmNex: the module gets its own CR_DATABASE_URL, and the host's async DATABASE_URL must be ignored.
+        env["CR_DATABASE_URL"] = os.environ["CR_TEST_DATABASE_URL"]
+        env["DATABASE_URL"] = "postgresql+asyncpg://host:host@invalid.example/host"
     return subprocess.run(
         [sys.executable, str(script), mode],
         cwd=tmp_path,

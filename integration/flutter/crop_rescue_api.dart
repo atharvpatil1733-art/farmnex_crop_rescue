@@ -316,16 +316,20 @@ class HealthOut {
 
 class CropRescueApi {
   final Dio _dio;
+  final String _base;
 
-  CropRescueApi(this._dio);
+  /// [dio] is the app's existing Dio (base URL and login token already set).
+  /// FarmNex mounts the backend under `/api/v2`; pass another [prefix] (or '')
+  /// if your backend mounts it elsewhere.
+  CropRescueApi(this._dio, {String prefix = '/api/v2'}) : _base = '${prefix.endsWith('/') ? prefix.substring(0, prefix.length - 1) : prefix}/rescue';
 
   Future<HealthOut> health() async {
-    final r = await _dio.get('/rescue/health');
+    final r = await _dio.get('$_base/health');
     return HealthOut.fromJson(r.data as Map<String, dynamic>);
   }
 
   Future<CropsOut> fetchCrops() async {
-    final r = await _dio.get('/rescue/crops');
+    final r = await _dio.get('$_base/crops');
     return CropsOut.fromJson(r.data as Map<String, dynamic>);
   }
 
@@ -341,7 +345,7 @@ class CropRescueApi {
     double floorPricePerKg = 0,
     double? temperatureC,
   }) async {
-    final r = await _dio.post('/rescue/lots', data: {
+    final r = await _dio.post('$_base/lots', data: {
       'crop_code': cropCode,
       'quantity_kg': quantityKg,
       'harvested_at': harvestedAt.toUtc().toIso8601String(),
@@ -355,23 +359,23 @@ class CropRescueApi {
   }
 
   Future<List<LotOut>> listLots() async {
-    final r = await _dio.get('/rescue/lots');
+    final r = await _dio.get('$_base/lots');
     return (r.data as List).map((e) => LotOut.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<LotDetailOut> getLot(String lotId) async {
-    final r = await _dio.get('/rescue/lots/$lotId');
+    final r = await _dio.get('$_base/lots/$lotId');
     return LotDetailOut.fromJson(r.data as Map<String, dynamic>);
   }
 
   /// Only works while the lot is AT_RISK; otherwise the backend answers 409.
   Future<List<MatchOut>> getMatches(String lotId) async {
-    final r = await _dio.get('/rescue/lots/$lotId/matches');
+    final r = await _dio.get('$_base/lots/$lotId/matches');
     return (r.data as List).map((e) => MatchOut.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<LotOut> markSold(String lotId) async {
-    final r = await _dio.post('/rescue/lots/$lotId/sold');
+    final r = await _dio.post('$_base/lots/$lotId/sold');
     return LotOut.fromJson(r.data as Map<String, dynamic>);
   }
 
@@ -381,7 +385,7 @@ class CropRescueApi {
     double? temperatureC,
     String? lotId,
   }) async {
-    final r = await _dio.post('/rescue/simulate', data: {
+    final r = await _dio.post('$_base/simulate', data: {
       'hours': hours,
       if (temperatureC != null) 'temperature_c': temperatureC,
       if (lotId != null) 'lot_id': lotId,
@@ -392,14 +396,14 @@ class CropRescueApi {
   /// Poll this every 30 s on the farmer home screen.
   Future<List<AlertOut>> fetchAlerts({bool unreadOnly = false}) async {
     final r = await _dio.get(
-      '/rescue/alerts',
+      '$_base/alerts',
       queryParameters: {'unread_only': unreadOnly},
     );
     return (r.data as List).map((e) => AlertOut.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<AlertOut> markAlertRead(String alertId) async {
-    final r = await _dio.post('/rescue/alerts/$alertId/read');
+    final r = await _dio.post('$_base/alerts/$alertId/read');
     return AlertOut.fromJson(r.data as Map<String, dynamic>);
   }
 }

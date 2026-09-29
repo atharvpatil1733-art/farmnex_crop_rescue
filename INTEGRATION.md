@@ -18,9 +18,9 @@ It runs **inside your existing backend**: same server, same URL, same login, sam
 
 ### 1. Add the module
 
-Copy the `crop_rescue/` folder into the backend, for example to `app/modules/crop_rescue/`. Any location works, because the module only uses relative imports.
+Copy the `crop_rescue/` folder into the backend, for example to `backend/app/modules/crop_rescue/`. Any location works, because the module only uses relative imports.
 
-Add these lines to the backend's requirements (skip any it already has):
+Add these lines to the backend's dependencies (skip any it already has). FarmNex production installs from `backend/pyproject.toml`, so add them there **and** in `requirements.txt`:
 
 ```
 fastapi>=0.110
@@ -42,6 +42,8 @@ Do not copy `dev_app.py`, `tests/` or `docs/`. They are for running this repo on
 
 4. **Already ran an earlier `001`?** Also run `migrations/003_lot_temperature.sql`. It adds one nullable `temperature_c` column to `cr_lots` (a fresh `001` already has it), and is safe to run twice.
 
+FarmNex keeps its own copies of these files in `backend/migrations/` (for example `010_cr_crop_rescue.sql` and `011_cr_demo_seed.sql`). Keep them identical to the ones here; a person still runs them in Supabase by hand.
+
 All these files only **add** `cr_` tables, indexes and a view, and are safe to run twice. **Do not re-run `001` after step 5**: it would put the demo `cr_buyer_pool` view back over your real-buyers one. To confirm, open **Table Editor**: you should see `cr_lots`, `cr_checks`, `cr_alerts` and `cr_demo_buyers`.
 
 Nothing else creates these tables. If you skip this step, the module still starts and `/rescue/health` can still say `"db": true` (it only tests the connection), but registering a lot fails with a database error until the tables exist.
@@ -52,12 +54,19 @@ Row-level security is switched on for the four `cr_` tables with no policies. Th
 
 ```python
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 
 from app.modules import crop_rescue          # adjust to where you placed it
 from app.modules.crop_rescue import router as rescue_router, start_scheduler, stop_scheduler
 
-crop_rescue.configure(engine=engine)          # reuse the backend's existing SQLAlchemy engine (optional)
+# FarmNex names below (User, get_current_user, /api/v2).
+# Do NOT call crop_rescue.configure(engine=...) with an async engine such as FarmNex's (asyncpg); ours is sync.
+# Set CR_DATABASE_URL instead (see "Database connection" below).
+
+async def rescue_farmer_id(user: User = Depends(get_current_user)) -> str:
+    if user.role is None or user.role.name != "FARMER":
+        raise HTTPException(403, "Only farmers can use Crop Rescue.")
+    return str(user.public_id)                # the public UUID; the internal integer id is never used
 
 @asynccontextmanager
 async def lifespan(app):
@@ -66,18 +75,20 @@ async def lifespan(app):
     stop_scheduler()
 
 app = FastAPI(lifespan=lifespan)              # or add these two calls to your existing lifespan
-app.include_router(rescue_router, dependencies=[Depends(get_current_user)])   # your existing login check
+app.include_router(rescue_router, prefix="/api/v2", dependencies=[Depends(get_current_user)])   # your existing login check
 # the farmer is always the logged-in user:
-app.dependency_overrides[crop_rescue.current_farmer_id] = lambda user=Depends(get_current_user): str(user.id)
+app.dependency_overrides[crop_rescue.current_farmer_id] = rescue_farmer_id
 ```
 
-Replace `get_current_user` with your backend's real login dependency, and `engine` with its real SQLAlchemy engine.
+FarmNex's `get_current_user` (in `app/api/dependencies/current_user.py`) already returns the `User` with its role loaded. Everything in FarmNex is under `/api/v2`, so the endpoints are `/api/v2/rescue/...`. On another backend, replace `get_current_user`, the role check and the prefix with your own.
 
 **The `dependency_overrides` line is not optional.** Without it, the module reads the farmer from a `?farmer_id=` URL parameter, which anyone could change. With it, the farmer always comes from the login and that parameter is ignored.
 
-**Database connection.** If you do not pass `engine=`, the module builds its own connection from `CR_DATABASE_URL` (or `DATABASE_URL`) the first time it is used. The URL must start with `postgresql+psycopg://` and end with `?sslmode=require`. Supabase dashboard, **Connect**, **Session pooler** string, then change `postgresql://` to `postgresql+psycopg://`. This is a database connection string, not an API key. Keep it in environment variables only.
+**Database connection.** Crop Rescue uses its own **synchronous** connection, separate from the backend's async pool. Set `CR_DATABASE_URL` in the backend's environment: Supabase dashboard, **Connect**, **Session pooler** string (port 5432), then change `postgresql://` to `postgresql+psycopg://` and end it with `?sslmode=require`. The module builds the connection the first time it is used. This is a database connection string, not an API key. Keep it in environment variables only.
 
-**Optional push notifications.** By default an alert is only written to `cr_alerts` and the app polls for it. To also send a push, pass a callback: `crop_rescue.configure(engine=engine, on_alert=my_fcm_sender)`. It receives the new alert after it is saved. The callback is synchronous and runs in the request or scheduler thread, so keep it fast (hand the push off to a background task). If it raises, the error is logged and the alert is kept.
+**Never rely on the `DATABASE_URL` fallback, and never pass the backend's own engine.** FarmNex's `DATABASE_URL` is `postgresql+asyncpg://...`. Using it (or its engine) fails with `MissingGreenlet`. The module refuses both with a clear error message instead.
+
+**Optional push notifications.** By default an alert is only written to `cr_alerts` and the app polls for it. To also send a push, pass a callback: `crop_rescue.configure(on_alert=my_fcm_sender)`. It receives the new alert after it is saved. The callback is synchronous and runs in the request or scheduler thread, so keep it fast (hand the push off to a background task). If it raises, the error is logged and the alert is kept.
 
 **Several server workers?** The scheduler starts once per worker. Set `CR_ENABLE_SCHEDULER=false` on all but one, or leave it off everywhere and call `POST /rescue/check` from an external cron. Even without the scheduler, listing lots or alerts re-checks anything overdue, so a farmer never sees a stale status.
 
@@ -86,10 +97,10 @@ Replace `get_current_user` with your backend's real login dependency, and `engin
 Copy `integration/flutter/crop_rescue_api.dart` into the app (it needs only the `dio` package). Create it with the app's **existing** Dio, so the base URL and login token carry over:
 
 ```dart
-final rescue = CropRescueApi(dio);
+final rescue = CropRescueApi(ApiClient().dio);   // FarmNex's one Dio: adds the token, refreshes on 401
 ```
 
-No method takes a farmer id, because the backend gets the farmer from the login token. Call `rescue.fetchAlerts()` on the farmer home screen every 30 seconds. Use `createLot`, `listLots`, `getLot`, `getMatches` (only works while a lot is `AT_RISK`), `markSold`, `simulate` (demo button), `markAlertRead` and `fetchCrops` for the rest.
+Paths are built under `/api/v2` by default (`CropRescueApi(dio, prefix: '/api/v2')`). If your backend mounts the router somewhere else, pass that `prefix`. No method takes a farmer id, because the backend gets the farmer from the login token. Call `rescue.fetchAlerts()` on the farmer home screen every 30 seconds. Use `createLot`, `listLots`, `getLot`, `getMatches` (only works while a lot is `AT_RISK`), `markSold`, `simulate` (demo button), `markAlertRead` and `fetchCrops` for the rest.
 
 ### 5. Real buyers (later)
 
@@ -97,11 +108,11 @@ Until you do this, buyers come from the 10 fictional demo buyers. To use real on
 
 ## Smoke tests (curl)
 
-Replace `BASE` with your backend URL and `AUTH` with the header your backend already uses.
+Replace `BASE` with your backend URL **including the `/api/v2` prefix** and `AUTH` with the header your backend already uses. Paths below are relative to that prefix (`/rescue/...`).
 
 ```bash
-BASE=https://your-backend.example.com
-AUTH="Authorization: Bearer <a-farmer-login-token>"
+BASE=https://your-backend.example.com/api/v2
+AUTH="Authorization: Bearer <a-farmer-login-token>"   # must be a FARMER account; other roles get 403
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)   # your computer's clock; if it runs ahead of the server, step 3 answers 422
 
 # 1. Is it mounted and can it reach the database?  Expect {"ok":true,"crops":8,"db":true}
@@ -130,17 +141,17 @@ curl -H "$AUTH" $BASE/rescue/lots/<LOT_ID>/matches
 curl -X POST -H "$AUTH" $BASE/rescue/alerts/<ALERT_ID>/read
 curl -X POST -H "$AUTH" $BASE/rescue/lots/<LOT_ID>/sold
 
-# 8. Run the engine over every open lot now (the same job the scheduler runs)
+# 8. Run the engine over every open lot now (the same job the scheduler runs). Needs an ADMIN or MANAGER token, not a farmer's
 curl -X POST -H "$AUTH" $BASE/rescue/check
 ```
 
-A request with no or a wrong token must return 401, and another farmer's lot id must return 404. Your backend's `/docs` page now has a **crop-rescue** section where each endpoint can be tried in one click.
+A request with no or a wrong token must return 401, a login that is not a FARMER must return 403, and another farmer's lot id must return 404. Your backend's `/docs` page now has a **crop-rescue** section where each endpoint can be tried in one click.
 
 ## How the farmer is identified
 
-Every farmer-facing endpoint takes the farmer from `current_farmer_id`, never from the request body. A lot or alert that belongs to someone else returns **404** (not 403), so other farmers' ids are not revealed. `POST /rescue/check` needs no farmer: it processes every farmer's open lots, so if that matters to you, restrict it (for example with a role check in the dependency you pass to `include_router`).
+Every farmer-facing endpoint takes the farmer from `current_farmer_id`, never from the request body. A lot or alert that belongs to someone else returns **404** (not 403), so other farmers' ids are not revealed. `POST /rescue/check` needs no farmer: it processes every farmer's open lots, so it must be limited to ADMIN or MANAGER accounts (FarmNex does this on the host side). The module itself does not check roles.
 
-The module opens its own database transactions on the engine you give it. It never joins or interferes with a transaction your backend has open.
+The module opens its own database transactions on its own connection. It never joins or interferes with a transaction your backend has open.
 
 ## Configuration (all optional)
 
@@ -148,7 +159,7 @@ Every setting has a default. Set an environment variable only to change one.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `CR_DATABASE_URL` | falls back to `DATABASE_URL` | only needed if you do not pass `engine=` |
+| `CR_DATABASE_URL` | none | **required on FarmNex**: `postgresql+psycopg://...:5432/postgres?sslmode=require`, never the async `DATABASE_URL` |
 | `CR_ALERT_HOURS` | 48 | minimum notice before spoilage |
 | `CR_CHECK_INTERVAL_HOURS` | 12 | how often lots are re-checked |
 | `CR_Q10` | 2.0 | how fast heat shortens shelf life (an assumption) |
@@ -163,8 +174,9 @@ Every setting has a default. Set an environment variable only to change one.
 ## Troubleshooting
 
 - **The backend won't start after adding the module.** Settings are checked when the module is imported (fail-fast), so a bad value stops startup with a `ValidationError` that names the variable, for example `CR_Q10=abc`. Fix or remove that `CR_*` variable.
-- **`/rescue/health` says `"db": false`.** The module cannot connect: no engine was passed and no valid `CR_DATABASE_URL` is set (step 3).
+- **`/rescue/health` says `"db": false`.** The module cannot connect: `CR_DATABASE_URL` is missing or wrong (step 3).
 - **Registering a lot fails with a database error, but health says `"db": true`.** The tables do not exist yet (step 2).
+- **Every call returns 403 "Only farmers can use Crop Rescue."** The logged-in user is not a FARMER. Log in with a farmer account.
 - **Every call returns 401 "Farmer not identified".** The `dependency_overrides` line in step 3 is missing or runs before the router is used.
 - **`/rescue/lots/<id>/matches` returns 409.** The lot is not `AT_RISK` yet. That is expected.
 - **Creating a lot returns 422.** `harvested_at` is in the future or has no time zone, or `crop_code` is not one of the 8 crops.

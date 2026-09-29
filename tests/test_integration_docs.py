@@ -89,8 +89,9 @@ def test_every_dart_route_exists_on_the_backend():
 
     backend = {(m, r.path) for r in api.router.routes for m in r.methods}
     dart = set()
+    names = {"_base": "/rescue", "lotId": "{lot_id}", "alertId": "{alert_id}"}
     for verb, path in re.findall(r"_dio\.(get|post)\(\s*'([^']+)'", DART):
-        dart.add((verb.upper(), re.sub(r"\$(\w+)", lambda m: "{" + {"lotId": "lot_id", "alertId": "alert_id"}[m.group(1)] + "}", path)))
+        dart.add((verb.upper(), re.sub(r"\$(\w+)", lambda m: names[m.group(1)], path)))
     assert dart <= backend, dart - backend
     assert {p for _, p in backend - dart} == {"/rescue/check"}  # the only route with no Dart method
 
@@ -106,7 +107,8 @@ def test_dart_request_keys_match_the_request_models():
 
 
 def test_dart_client_takes_an_existing_dio_and_no_farmer_id():
-    assert re.search(r"CropRescueApi\(this\._dio\)", DART)
+    assert re.search(r"CropRescueApi\(this\._dio, \{String prefix = '/api/v2'\}\)", DART)  # FarmNex mounts under /api/v2
+    assert "}/rescue'" in DART  # _base = prefix + /rescue
     code = re.sub(r"//.*", "", DART)
     assert not re.search(r"farmer", code, re.IGNORECASE)
 
@@ -126,7 +128,7 @@ def test_integration_md_has_exactly_five_numbered_steps():
 
 def test_integration_md_has_the_required_content():
     assert "app.dependency_overrides[crop_rescue.current_farmer_id]" in INTEGRATION
-    assert "include_router(rescue_router, dependencies=[Depends(get_current_user)])" in INTEGRATION
+    assert 'include_router(rescue_router, prefix="/api/v2", dependencies=[Depends(get_current_user)])' in INTEGRATION
     assert "CR_ENABLE_SIMULATE=false" in INTEGRATION
     assert "ValidationError" in INTEGRATION  # fail-fast troubleshooting note
     assert "001_crop_rescue.sql" in INTEGRATION and "002_demo_seed.sql" in INTEGRATION
@@ -137,3 +139,16 @@ def test_integration_md_has_the_required_content():
     ):
         assert path in INTEGRATION, path
     assert "curl" in INTEGRATION
+    assert "003_lot_temperature.sql" in INTEGRATION
+
+
+def test_integration_md_follows_the_farmnex_host_facts():
+    """docs/FARMNEX_HOST.md wins over SPEC.md about the host."""
+    assert "str(user.public_id)" in INTEGRATION  # the farmer id is the public UUID, never the internal integer id
+    assert "user.id" not in INTEGRATION
+    assert "FARMER" in INTEGRATION  # only farmers may use it
+    assert "CR_DATABASE_URL" in INTEGRATION
+    assert "MissingGreenlet" in INTEGRATION  # why the host's async engine must not be passed
+    assert "crop_rescue.configure(engine=engine)" not in INTEGRATION
+    assert "ADMIN" in INTEGRATION and "MANAGER" in INTEGRATION  # POST /rescue/check is not for farmers
+    assert "/api/v2" in INTEGRATION.split("BASE=", 1)[1].splitlines()[0]
