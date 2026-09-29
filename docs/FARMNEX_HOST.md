@@ -24,7 +24,7 @@ Host wiring, for reference (lives in farmnex_main `backend/app/modules/crop_resc
 host's `wiring.py` loads when `ENABLE_CROP_RESCUE=true` — not here):
 
 ```python
-from app.modules import crop_rescue                       # imported inside mount_components()
+from app.modules import crop_rescue                       # imported inside crop_rescue_host.mount(app)
 
 async def rescue_farmer_id(user: User = Depends(get_current_user)) -> str:
     if user.role is None or user.role.name != "FARMER":
