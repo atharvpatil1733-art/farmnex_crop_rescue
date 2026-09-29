@@ -48,3 +48,16 @@ jobs:
 
       - name: Run doctests in crop_rescue/core
         run: pytest -q --doctest-modules crop_rescue/core -p no:cacheprovider
+
+      - name: Judge demo (PASS/FAIL per step, transcript saved)
+        env:
+          CR_DEMO_TRANSCRIPT: demo_transcript.md
+        run: pytest tests/test_demo.py -s -q
+
+      - name: Upload demo transcript
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-transcript
+          path: demo_transcript.md
+          if-no-files-found: ignore
