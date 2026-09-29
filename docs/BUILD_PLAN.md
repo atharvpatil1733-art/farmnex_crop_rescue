@@ -32,8 +32,8 @@ Build one phase per `/build-phase <n>` and stop after each one. Rough times assu
 - [x] `/integration-check` all ✅
 
 ## Phase 6: Judge polish (≈1 h) · SPEC: Crop data, Algorithm, Demo script
-- [ ] README.md: the problem in 2 lines, the algorithm in under a page, the source citation, an assumptions table, the demo script
-- [ ] `/demo` all PASS; transcript saved to `docs/demo_transcript.md`
-- [ ] judge-reviewer: no MUST-FIX left
+- [x] README.md: the problem in 2 lines, the algorithm in under a page, the source citation, an assumptions table, the demo script
+- [x] `/demo` all PASS; transcript saved to `docs/demo_transcript.md`
+- [x] judge-reviewer: no MUST-FIX left
 
 **Total ≈ 7–8 h.** Then mount it in the main backend (≈30 min) and wire up the Flutter screens (≈1–2 h).

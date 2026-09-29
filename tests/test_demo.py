@@ -33,9 +33,11 @@ def _lot_body(crop: str, mode: str = "ambient") -> dict:
     }
 
 
-def test_judge_demo(db):
+def test_judge_demo(db, monkeypatch):
     with db.begin() as conn:
         conn.exec_driver_sql(SEED.read_text(encoding="utf-8"))
+    monkeypatch.setattr(crop_rescue.db, "_injected_engine", None, raising=False)
+    monkeypatch.setattr(crop_rescue.db, "_lazy_engine", None, raising=False)
     crop_rescue.configure(engine=db)
     app = FastAPI()
     app.include_router(router)

@@ -35,7 +35,7 @@ These are already in `crop_rescue/data/crops.json`.
 life_hours(T) = ref_life_hours / Q10 ** ((T - ref_temp_c) / 10)
 ```
 
-- `Q10` defaults to `CR_Q10 = 2.0`. **This is a modelling assumption, not measured data.** Label it that way in the README and in `/rescue/crops`. The common rule of thumb for produce is 2–3; we pick the conservative end.
+- `Q10` defaults to `CR_Q10 = 2.0`. **This is a modelling assumption, not measured data.** Label it that way in the README and in `/rescue/crops`. The common rule of thumb for produce is 2–3; we pick the lower end, which is the optimistic one (a higher Q10 alerts earlier).
 - If `T <= ref_temp_c` (cold storage), use `ref_life_hours`. Never extend life beyond the handbook value.
 
 ### 2. Freshness accumulation: runs on every check

@@ -51,3 +51,4 @@ def test_readme_has_the_five_step_demo_and_links_the_transcript():
     for n in range(1, 6):
         assert f"\n{n}. **" in README, n
     assert "docs/demo_transcript.md" in README
+    assert (ROOT / "docs" / "demo_transcript.md").exists()
