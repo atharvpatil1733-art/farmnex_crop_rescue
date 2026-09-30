@@ -37,3 +37,12 @@ def test_simulate_switch_does_not_affect_other_endpoints(monkeypatch):
     response = client.get("/rescue/crops")
 
     assert response.status_code == 200
+
+
+def test_simulate_hours_are_capped():
+    """Verify that a huge `hours` value is rejected (422) instead of ageing lots for years."""
+    client = _client()
+
+    response = client.post("/rescue/simulate", json={"hours": 100000})
+
+    assert response.status_code == 422

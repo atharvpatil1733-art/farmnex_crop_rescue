@@ -16,6 +16,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
+import uuid
 
 import sqlalchemy as sa
 from sqlalchemy import Connection, Engine
@@ -278,8 +279,19 @@ def insert_lot(
     return _lot_from_row(row)
 
 
+def _is_uuid(value: str) -> bool:
+    """True if `value` parses as a UUID (a bad id must give "not found", not a database error)."""
+    try:
+        uuid.UUID(str(value))
+    except ValueError:
+        return False
+    return True
+
+
 def get_lot(bind: Bind, lot_id: str, farmer_id: str) -> LotRecord | None:
-    """A lot by id, scoped to `farmer_id`. None if missing or owned by someone else."""
+    """A lot by id, scoped to `farmer_id`. None if missing, not a UUID, or owned by someone else."""
+    if not _is_uuid(lot_id):
+        return None
     stmt = sa.select(cr_lots).where(cr_lots.c.id == lot_id, cr_lots.c.farmer_id == farmer_id)
     with _use(bind) as conn:
         row = conn.execute(stmt).one_or_none()
@@ -336,6 +348,8 @@ def update_lot_after_check(
 
 def mark_lot_sold(bind: Bind, lot_id: str, farmer_id: str) -> LotRecord | None:
     """Mark a lot SOLD. None if it isn't found (or belongs to someone else)."""
+    if not _is_uuid(lot_id):
+        return None
     stmt = (
         sa.update(cr_lots)
         .where(cr_lots.c.id == lot_id, cr_lots.c.farmer_id == farmer_id)
@@ -424,6 +438,8 @@ def list_alerts(bind: Bind, farmer_id: str, unread_only: bool = False) -> list[A
 
 def mark_alert_read(bind: Bind, alert_id: str, farmer_id: str, read_at: datetime) -> AlertRecord | None:
     """Mark one of a farmer's alerts read. None if it isn't found."""
+    if not _is_uuid(alert_id):
+        return None
     stmt = (
         sa.update(cr_alerts)
         .where(cr_alerts.c.id == alert_id, cr_alerts.c.farmer_id == farmer_id)
