@@ -167,9 +167,9 @@ Every setting has a default. Set an environment variable only to change one.
 | `CR_USE_OPEN_METEO` | false | look up the current temperature online (3 s timeout) |
 | `CR_RADIUS_KM`, `CR_ROAD_FACTOR`, `CR_AVG_SPEED_KMPH`, `CR_LOADING_HOURS`, `CR_TRANSPORT_RS_PER_KM`, `CR_TOP_N` | 50, 1.3, 35, 2, 25, 3 | buyer matching |
 | `CR_ENABLE_SCHEDULER` | true | run the background check |
-| `CR_ENABLE_SIMULATE` | true | the demo fast-forward endpoint |
+| `CR_ENABLE_SIMULATE` | false | the demo fast-forward endpoint (`hours` is capped at 720) |
 
-**Set `CR_ENABLE_SIMULATE=false` once the demo is over.** After that `/rescue/simulate` returns 404.
+**Turn `CR_ENABLE_SIMULATE` on only for the demo, and set `CR_ENABLE_SIMULATE=false` again afterwards (it is off by default).** While it is off `/rescue/simulate` returns 404.
 
 ## Troubleshooting
 

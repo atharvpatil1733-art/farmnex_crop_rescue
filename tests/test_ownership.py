@@ -141,3 +141,11 @@ def test_unknown_lot_id_is_404_not_500(app):
     owner = f"farmer-{uuid.uuid4()}"
     response = _client_as(app, owner).get(f"/rescue/lots/{uuid.uuid4()}")
     assert response.status_code == 404
+
+
+def test_non_uuid_ids_are_404_not_500(app):
+    """Verify that a malformed lot or alert id returns HTTP 404, not a database error."""
+    client = _client_as(app, f"farmer-{uuid.uuid4()}")
+    assert client.get("/rescue/lots/not-a-uuid").status_code == 404
+    assert client.post("/rescue/lots/not-a-uuid/sold").status_code == 404
+    assert client.post("/rescue/alerts/not-a-uuid/read").status_code == 404

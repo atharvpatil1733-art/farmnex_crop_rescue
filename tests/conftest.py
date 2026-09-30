@@ -56,3 +56,14 @@ def db(cr_engine):
         conn.exec_driver_sql("DELETE FROM cr_lots")
         conn.exec_driver_sql("DELETE FROM cr_demo_buyers")
     return cr_engine
+
+
+@pytest.fixture(autouse=True)
+def _simulate_on_for_tests(monkeypatch):
+    """The demo fast-forward is off by default in production; most tests drive lots with it.
+
+    Tests that check the switch set `enable_simulate` themselves (after this runs).
+    """
+    from crop_rescue import settings
+
+    monkeypatch.setattr(settings, "enable_simulate", True)

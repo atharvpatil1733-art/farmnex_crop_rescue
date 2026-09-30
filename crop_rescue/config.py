@@ -42,7 +42,7 @@ class Settings(BaseSettings):
 
     # Switches
     enable_scheduler: bool = True
-    enable_simulate: bool = True  # set to false after the demo
+    enable_simulate: bool = False  # demo only: set CR_ENABLE_SIMULATE=true for the demo, off otherwise
 
 
 settings = Settings()

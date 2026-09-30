@@ -148,7 +148,7 @@ class SimulateRequest(BaseModel):
         json_schema_extra={"example": {"hours": 24, "temperature_c": 34, "lot_id": None}}
     )
 
-    hours: float = Field(gt=0)
+    hours: float = Field(gt=0, le=720, description="At most 720 (30 days)")
     temperature_c: float | None = Field(default=None, description="Omit to resolve temperature normally")
     lot_id: str | None = Field(default=None, description="Omit to advance every one of your open lots")
 

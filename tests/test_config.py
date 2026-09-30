@@ -47,16 +47,16 @@ def test_defaults(clean_env):
     assert s.transport_rs_per_km == 25
     assert s.top_n == 3
     assert s.enable_scheduler is True
-    assert s.enable_simulate is True
+    assert s.enable_simulate is False
 
 
 def test_env_overrides(clean_env):
     """Verify that CR_ variables override numeric and boolean defaults."""
     clean_env.setenv("CR_Q10", "3")
-    clean_env.setenv("CR_ENABLE_SIMULATE", "false")
+    clean_env.setenv("CR_ENABLE_SIMULATE", "true")
     s = Settings(_env_file=None)
     assert s.q10 == 3.0
-    assert s.enable_simulate is False
+    assert s.enable_simulate is True
 
 
 def test_database_url_falls_back_to_host_database_url(clean_env):
